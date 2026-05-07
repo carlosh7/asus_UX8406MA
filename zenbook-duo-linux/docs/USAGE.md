@@ -46,6 +46,13 @@ Para proteger la batería si siempre usas el equipo conectado a la corriente:
 - `duo bat-limit 80`: Limita la carga al 80%.
 - `duo bat-limit 100`: Permite la carga completa.
 
+## 🔊 Optimización de Sonido
+
+Hemos incluido mejoras para compensar las limitaciones de los drivers de audio en Linux:
+1.  **Ecualización Avanzada**: Perfil "ZenbookDuo" para EasyEffects (mejora bajos y volumen).
+2.  **Niveles de Hardware**: El instalador sube automáticamente los niveles de ALSA al 100%.
+3.  **Activación de Woofers**: Se incluyen parámetros del kernel para intentar activar los 4 parlantes del sistema Harman Kardon.
+
 ---
 
 ## 🛠️ Procesos en Segundo Plano (Daemons)

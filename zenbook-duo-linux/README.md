@@ -15,6 +15,7 @@ Soporte completo de hardware para la **ASUS Zenbook Duo 2024 (UX8406MA)** en Lin
   - Teclas F1-F12 configuradas como primarias (ideal para programadores).
   - Atajos multimedia accesibles mediante `Super (Windows) + F1-F12`.
 - **Límite de Batería**: Configura un límite de carga (ej. 80%) para extender la vida útil de la batería.
+- **Audio Optimizado**: Perfil de ecualización integrado para EasyEffects y corrección de niveles de volumen para el sistema Harman Kardon.
 
 ## 🚀 Instalación Rápida
 
