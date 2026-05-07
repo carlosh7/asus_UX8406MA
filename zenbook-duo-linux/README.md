@@ -1,70 +1,44 @@
-# Zenbook Duo Linux
+# Zenbook Duo Linux (UX8406MA)
 
-Hardware support for ASUS Zenbook Duo 2024 (UX8406MA) on Linux.
+Soporte completo de hardware para la **ASUS Zenbook Duo 2024 (UX8406MA)** en Linux. Este proyecto soluciona los problemas comunes de las dos pantallas, el brillo sincronizado, el límite de carga de batería y la gestión avanzada del teclado inalámbrico.
 
-## Quick Install
+## ✨ Características Principales
+
+- **Gestión de Pantalla Dual**: Cambia entre una pantalla, ambas o modo vertical con un solo comando.
+- **Detección Automática de Teclado**: El sistema detecta cuando acoplas o retiras el teclado físico para apagar/encender la segunda pantalla automáticamente.
+- **Sincronización de Brillo**: El brillo de la pantalla inferior se sincroniza automáticamente con la principal.
+- **Control Inteligente de Retroiluminación**:
+  - Ajuste automático según la luz ambiental.
+  - Apagado automático por inactividad.
+  - Apagado instantáneo al apagar el monitor.
+- **Modo Pro-Keyboard (F1-F12)**:
+  - Teclas F1-F12 configuradas como primarias (ideal para programadores).
+  - Atajos multimedia accesibles mediante `Super (Windows) + F1-F12`.
+- **Límite de Batería**: Configura un límite de carga (ej. 80%) para extender la vida útil de la batería.
+
+## 🚀 Instalación Rápida
+
+Para usuarios principiantes, simplemente abre una terminal y ejecuta:
 
 ```bash
-git clone https://github.com/your-repo/zenbook-duo-linux.git
-cd zenbook-duo-linux
-cd install
-./install.sh
+git clone https://github.com/carlosh7/asus_UX8406MA.git
+cd asus_UX8406MA/zenbook-duo-linux
+sudo ./install/install.sh
 ```
 
-## Requirements
-
-- Ubuntu 24.04+ or Debian 12+
-- GNOME (for display management)
-
-## Usage
-
+Después de instalar, ejecuta este comando para configurar los atajos de teclado `Super + F1-F12`:
 ```bash
-# Display management
-duo top              # Top display only
-duo bottom           # Bottom display only
-duo both             # Both displays
-duo toggle           # Toggle between top and both
-
-# Brightness
-duo sync-backlight   # Sync brightness once
-duo watch-backlight  # Auto-sync brightness
-
-# Keyboard backlight (0=off, 3=max)
-duo set-kb-backlight 2
-
-# Battery limit
-duo bat-limit 80
-
-# Auto rotation
-duo watch-rotation
-
-# Help
-duo help
+setup-hotkeys.sh
 ```
 
-## Hardware Support
+## 📖 Documentación Detallada
 
-| Feature | Status |
-|---------|--------|
-| Dual 3K displays | ✅ |
-| Touchscreen | ✅ |
-| Keyboard backlight | ✅ |
-| Brightness sync | ✅ |
-| Battery limit | ✅ |
-| Auto rotation | ✅ |
-| Tablet mode | ✅ |
-| Webcam | ✅ |
-| Bluetooth | ✅ |
-| Fn keys (F1-F12) | Partial |
-| Auto keyboard detect | ✅ (daemon) |
+- [Guía de Instalación Paso a Paso](docs/INSTALL.md)
+- [Manual de Uso y Comandos](docs/USAGE.md)
+- [Solución de Problemas](docs/TROUBLESHOOTING.md)
 
-## Documentation
+## 🤝 Referencias y Créditos
 
-See `docs/` folder for detailed guides:
-- INSTALL.md - Full installation guide
-- USAGE.md - Command reference
-- TROUBLESHOOTING.md - Common issues
-
-## License
-
-BSD-2-Clause
+Inspirado y basado en el excelente trabajo de:
+- `alesya-h/zenbook-duo-2024-ux8406ma-linux`
+- `valirc/zenbook-duo-2024-ux8406ma-daemon`

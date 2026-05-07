@@ -1,112 +1,68 @@
-# Installation Guide
+# Guía de Instalación para Principiantes
 
-## Prerequisites
+Esta guía te ayudará a configurar tu ASUS Zenbook Duo 2024 en Linux paso a paso.
 
-### System Requirements
-- Ubuntu 24.04.1 LTS or newer
-- Debian 12 (Bookworm) or newer
-- GNOME Desktop Environment
+## 📋 Requisitos Previos
 
-### Required Packages
-The installer will automatically install:
-- `python3` - Python runtime
-- `python3-libusb` - USB device access
-- `gnome-monitor-config` - Display configuration
-- `inotify-tools` - File monitoring
-- `lm-sensors` - Hardware sensors
-- `iio-sensor-proxy` - Accelerometer for rotation
-- `usbutils` - USB device listing
+1.  **Sistema Operativo**: Recomendamos **Ubuntu 24.04 LTS** o superior, o **Debian 12**.
+2.  **Entorno de Escritorio**: Esta guía está diseñada para **GNOME** (el escritorio por defecto de Ubuntu).
+3.  **Conexión a Internet**: Necesaria para descargar dependencias.
 
-## Installation Steps
+---
 
-### 1. Clone Repository
+## 🛠️ Paso 1: Abrir la Terminal
+
+Presiona `Ctrl + Alt + T` en tu teclado para abrir una ventana de terminal. Aquí es donde escribiremos los comandos.
+
+## 🛠️ Paso 2: Descargar el Código
+
+Copia y pega el siguiente comando en la terminal y presiona `Enter`:
 
 ```bash
-git clone https://github.com/your-repo/zenbook-duo-linux.git
-cd zenbook-duo-linux
+git clone https://github.com/carlosh7/asus_UX8406MA.git
 ```
 
-### 2. Run Installer
+Este comando descargará todos los archivos necesarios a una carpeta llamada `asus_UX8406MA` en tu equipo.
+
+## 🛠️ Paso 3: Entrar en la Carpeta
+
+Escribe lo siguiente:
 
 ```bash
-cd install
-./install.sh
+cd asus_UX8406MA/zenbook-duo-linux
 ```
 
-### 3. Log Out and Back In
-Required for group membership changes (input group).
+## 🛠️ Paso 4: Ejecutar el Instalador
 
-### 4. Test Installation
+Ahora vamos a ejecutar el script que instala todo automáticamente. Te pedirá tu contraseña (es normal que no se vean asteriscos mientras escribes).
 
 ```bash
-duo help
-duo both
-duo set-kb-backlight 2
+sudo ./install/install.sh
 ```
 
-## Manual Installation (Optional)
+**¿Qué hace este script?**
+- Instala programas necesarios (drivers de USB, sensores de luz, etc.).
+- Configura el sistema para que el brillo se sincronice solo.
+- Instala el "demonio" (un programa que corre de fondo) para detectar el teclado.
 
-If you prefer manual installation:
+## 🛠️ Paso 5: Configurar los Atajos de Teclado (Opcional pero recomendado)
+
+Para que las teclas F1-F12 funcionen como teclas de función normales y puedas usar `Super (Windows) + Fx` para el volumen/brillo, ejecuta:
 
 ```bash
-# Create directories
-sudo mkdir -p /opt/zenbook-duo /etc/zenbook-duo
-
-# Copy scripts
-sudo cp scripts/duo /usr/local/bin/
-sudo cp scripts/bk.py /usr/local/bin/
-sudo chmod +x /usr/local/bin/duo
-
-# Install dependencies
-sudo apt install python3 python3-libusb gnome-monitor-config inotify-tools iio-sensor-proxy
+setup-hotkeys.sh
 ```
 
-## Post-Installation
+## 🛠️ Paso 6: Reiniciar
 
-### Auto-start on Login
+Para que todos los cambios surtan efecto (especialmente la detección del teclado y el límite de batería), reinicia tu computadora.
 
-```bash
-# For brightness sync
-systemctl --user enable --now brightness-sync.service
+---
 
-# For display auto-management (run at session start)
-duo watch-displays &
-```
+## ✅ ¿Cómo saber si funcionó?
 
-### Configuration Files
+1.  **Segunda Pantalla**: Al despegar el teclado físico, la pantalla inferior debería encenderse sola. Al ponerlo encima, debería apagarse.
+2.  **Brillo**: Si cambias el brillo de la pantalla principal, la de abajo debería cambiar igual.
+3.  **Teclado**: Prueba presionar `Super (Windows) + F3`. Debería subir el volumen.
 
-- `/etc/zenbook-duo/` - Configuration directory (future)
-- `~/.config/systemd/user/` - User systemd services
-
-## Uninstallation
-
-```bash
-sudo rm -f /usr/local/bin/duo /usr/local/bin/bk.py
-sudo rm -rf /opt/zenbook-duo /etc/zenbook-duo
-rm -rf ~/.config/systemd/user/brightness-sync.service
-systemctl --user daemon-reload
-```
-
-## Troubleshooting
-
-### "gnome-monitor-config not found"
-Install manually:
-```bash
-sudo apt install gnome-monitor-config
-```
-
-### "Permission denied" errors
-Make sure you logged out and back in after installation to apply group changes.
-
-### Brightness not working
-Check backlight path:
-```bash
-ls /sys/class/backlight/
-```
-Update the `backlight` variable in `scripts/duo` if different.
-
-### Battery limit not working
-Verify sysfs path:
-```bash
-ls /sys/class/power_supply/BAT0/
-```
+¡Felicidades! Ya tienes tu Zenbook Duo optimizada para Linux.

@@ -1,247 +1,55 @@
-# Usage Reference
+# Manual de Uso y Funciones
 
-## Commands
+Esta guía detalla todas las capacidades de las herramientas instaladas para tu ASUS Zenbook Duo.
 
-### duo - Main Control Script
+## 🖥️ Gestión de Pantallas (Comando `duo`)
 
-```bash
-duo <command> [arguments]
-```
+El comando `duo` es el centro de control para tus pantallas.
 
-#### Display Management
+- `duo top`: Apaga la pantalla inferior y deja solo la principal.
+- `duo both`: Enciende ambas pantallas (modo extendido).
+- `duo toggle`: Cambia rápidamente entre usar una o ambas pantallas.
+- `duo status`: Te dice si el teclado está conectado por USB o Bluetooth.
 
-**duo top**
-Show only top display (eDP-1).
+## 🔆 Brillo y Retroiluminación
 
-```bash
-duo top
-```
+### Sincronización Automática
+El sistema vigila la pantalla principal. Si subes o bajas el brillo, la pantalla inferior se ajustará automáticamente para coincidir.
 
-**duo bottom**
-Show only bottom display (eDP-2).
+### Retroiluminación del Teclado
+Hemos implementado un sistema inteligente que ahorra batería y cuida tu vista:
+1.  **Ajuste por Luz**: Si hay mucha luz en la habitación, el teclado se apaga solo.
+2.  **Inactividad**: Si no tocas el teclado por 30 segundos, se apaga. Al tocarlo, vuelve a encenderse.
+3.  **Ahorro**: Si el monitor se apaga, el teclado se apaga instantáneamente.
 
-```bash
-duo bottom
-```
+## ⌨️ Teclado Avanzado (F1-F12)
 
-**duo both**
-Show both displays (default for desktop mode).
+Por defecto, hemos configurado el teclado en **Modo Función**.
 
-```bash
-duo both
-```
+- **F1..F12**: Funcionan como teclas estándar (útil para F5 en el navegador, Alt+F4 para cerrar, etc.).
+- **Combinación Super (Windows) + Fx**:
+    - `Super + F1`: Silencio (Mute)
+    - `Super + F2/F3`: Bajar/Subir Volumen
+    - `Super + F4`: Cambiar nivel de luz del teclado (Ciclo)
+    - `Super + F5/F6`: Bajar/Subir Brillo
+    - `Super + F7`: Intercambiar pantallas
+    - `Super + F10`: Activar/Desactivar Bluetooth
 
-**duo toggle**
-Toggle between top-only and both displays.
+### Cambiar Modo de Hardware
+Si prefieres el modo original (Multimedia por defecto), puedes usar:
+- `fn-lock.py 0`: Vuelve al modo multimedia original.
+- `fn-lock.py 1`: Activa el modo de teclas de función (F1-F12).
 
-```bash
-duo toggle
-```
+## 🔋 Límite de Carga de Batería
 
-**duo left-up**
-Position screens vertically (bottom on left).
-
-```bash
-duo left-up
-```
-
-**duo right-up**
-Position screens vertically (bottom on right).
-
-```bash
-duo right-up
-```
-
-**duo status**
-Show current display configuration.
-
-```bash
-duo status
-```
-
-**duo watch-displays**
-Auto-detect keyboard attachment and adjust displays.
-Run in background: `duo watch-displays &`
-
-```bash
-duo watch-displays
-```
-
-#### Brightness
-
-**duo sync-backlight**
-Sync brightness from main display to bottom display (one-time).
-
-```bash
-duo sync-backlight
-```
-
-**duo watch-backlight**
-Continuously sync brightness. Run in background:
-```bash
-duo watch-backlight &
-```
-
-#### Keyboard
-
-**duo set-kb-backlight <0-3>**
-Set keyboard backlight level.
-
-```bash
-duo set-kb-backlight 0  # Off
-duo set-kb-backlight 1  # Low
-duo set-kb-backlight 2  # Medium
-duo set-kb-backlight 3  # High
-```
-
-#### Battery
-
-**duo bat-limit [percentage]**
-Set battery charge limit (default: 80%).
-
-```bash
-duo bat-limit          # Set to 80%
-duo bat-limit 60       # Set to 60%
-duo bat-limit 100     # Remove limit
-```
-
-#### Tablet Mode
-
-**duo set-tablet-mapping**
-Configure touchscreen mapping for tablet mode.
-
-```bash
-duo set-tablet-mapping
-```
-
-**duo toggle-bottom-touch**
-Toggle touch input on bottom display.
-
-```bash
-duo toggle-bottom-touch
-```
-
-#### Rotation
-
-**duo watch-rotation**
-Auto-rotate displays based on accelerometer.
-Requires iio-sensor-proxy.
-
-```bash
-duo watch-rotation &
-```
-
-#### System
-
-**duo model**
-Show detected model (3k or 1080p).
-
-```bash
-duo model
-```
-
-**duo help**
-Show help message with all commands.
-
-```bash
-duo help
-```
+Para proteger la batería si siempre usas el equipo conectado a la corriente:
+- `duo bat-limit 80`: Limita la carga al 80%.
+- `duo bat-limit 100`: Permite la carga completa.
 
 ---
 
-## bk.py - Keyboard Backlight
+## 🛠️ Procesos en Segundo Plano (Daemons)
 
-Control keyboard backlight directly.
-
-```bash
-python3 /usr/local/bin/bk.py <level>
-```
-
-Arguments:
-- `0` - Off
-- `1` - Low
-- `2` - Medium  
-- `3` - High
-
----
-
-## Common Use Cases
-
-### Startup Script
-Add to ~/.bashrc or session startup:
-
-```bash
-# Sync brightness
-duo watch-backlight &
-
-# Auto-detach keyboard
-duo watch-displays &
-```
-
-### Hotkeys Configuration
-
-In GNOME Settings → Keyboard → Custom Shortcuts:
-
-| Command | Suggested Shortcut |
-|---------|-------------------|
-| duo toggle | Super + P |
-| duo set-kb-backlight 0 | Super + F4 |
-| duo bat-limit 80 | Super + F10 |
-
----
-
-## Systemd Services
-
-### brightness-sync.service
-Auto-starts brightness sync on login.
-
-```bash
-# Enable
-systemctl --user enable brightness-sync.service
-
-# Start
-systemctl --user start brightness-sync.service
-
-# Check status
-systemctl --user status brightness-sync.service
-```
-
-### zenbook-duo.service (Daemon)
-Full hardware daemon with auto keyboard detection.
-
-```bash
-# Enable on boot (system-wide, requires sudo)
-sudo systemctl enable zenbook-duo.service
-
-# Start now
-sudo systemctl start zenbook-duo.service
-
-# Check status
-sudo systemctl status zenbook-duo.service
-
-# View logs
-sudo journalctl -u zenbook-duo.service -f
-```
-
----
-
-## zenbook-duo - Daemon
-
-The daemon provides automatic hardware management:
-
-```bash
-zenbook-duo daemon      # Run as daemon
-zenbook-duo status     # Show keyboard/display status
-zenbook-duo display-both
-zenbook-duo display-top
-zenbook-duo brightness
-zenbook-duo battery 80
-```
-
-Features:
-- Auto-detect USB/Bluetooth keyboard
-- Auto-toggle bottom screen on keyboard attach/detach
-- Optional: auto-brightness sync
-- Optional: auto-bluetooth toggle
-
-Configuration: `/etc/zenbook-duo/zenbook-duo.conf`
+El sistema instala dos servicios que funcionan siempre:
+1.  **`zenbook-duo`**: Vigila el teclado. Si lo quitas de encima de la pantalla inferior, esta se enciende automáticamente.
+2.  **`zenbook-light-monitor`**: Gestiona la luz del teclado basándose en la luz ambiental y el estado del monitor.
