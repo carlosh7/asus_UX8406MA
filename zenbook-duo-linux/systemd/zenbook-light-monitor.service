@@ -1,0 +1,12 @@
+[Unit]
+Description=Zenbook Duo Light Monitor
+After=graphical.target
+
+[Service]
+Type=forking
+ExecStart=/home/carlosh/asus_UX8406MA/zenbook-duo-linux/scripts/light-monitor.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target

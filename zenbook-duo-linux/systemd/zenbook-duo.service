@@ -1,0 +1,15 @@
+[Unit]
+Description=Zenbook Duo Hardware Daemon
+After=graphical.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+ExecStart=/usr/local/bin/zenbook-duo daemon
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target

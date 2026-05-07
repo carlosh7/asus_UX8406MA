@@ -1,0 +1,249 @@
+#!/usr/bin/env bash
+
+cd "$(dirname "$(realpath "$0")")"
+
+# Detect session type (X11 or Wayland)
+# Detect session type (X11 or Wayland)
+function is_x11 {
+    # If already set, use it
+    if [ "$XDG_SESSION_TYPE" = "x11" ]; then return 0; fi
+    if [ "$XDG_SESSION_TYPE" = "wayland" ]; then return 1; fi
+    
+    # Try to detect from loginctl if running as root
+    if [ "$EUID" -eq 0 ]; then
+        local session_id=$(loginctl list-sessions | grep " seat0 " | awk '{print $1}' | head -1)
+        if [ -n "$session_id" ]; then
+            local type=$(loginctl show-session "$session_id" -p Type --value)
+            if [ "$type" = "x11" ]; then return 0; fi
+            if [ "$type" = "wayland" ]; then return 1; fi
+        fi
+    fi
+
+    # Fallback to TTY/Display check
+    if [ -n "$DISPLAY" ]; then return 0; fi
+    return 1
+}
+
+# Ensure we have DISPLAY and XAUTHORITY if in X11
+if is_x11 && [ -z "$DISPLAY" ]; then
+    export DISPLAY=:0
+    export XAUTHORITY=$(find /run/user/ -name Xauthority 2>/dev/null | head -1)
+fi
+
+function get_resolution {
+    xrandr 2>/dev/null | grep -A1 "eDP-1" | grep -oP '\d+x\d+' | head -1
+}
+
+function detect-model {
+    local res=$(get_resolution)
+    if [[ "$res" == "2880x1800" ]]; then
+        echo "3k"
+    else
+        echo "1080p"
+    fi
+}
+
+MODEL=$(detect-model)
+
+if [ "$MODEL" = "3k" ]; then
+  preferred_resolution="2880x1800@120.000"
+  backlight="card1-eDP-2-backlight"
+  ui_scale=1.75
+  y_offset=1030
+  top_display="eDP-1"
+  bottom_display="eDP-2"
+else
+  preferred_resolution="1920x1200@60.003"
+  backlight="card1-eDP-2-backlight"
+  ui_scale=1
+  y_offset=1200
+  top_display="eDP-1"
+  bottom_display="eDP-2"
+fi
+
+function suenv {
+    sudo /usr/bin/env "$@"
+}
+
+function set-display-x11 {
+    local mode="$1"
+    
+    case "$mode" in
+        top)
+            xrandr --output "$top_display" --auto --primary
+            xrandr --output "$bottom_display" --off 2>/dev/null || true
+            ;;
+        bottom)
+            xrandr --output "$bottom_display" --auto --primary
+            xrandr --output "$top_display" --off 2>/dev/null || true
+            ;;
+        both)
+            xrandr --output "$top_display" --auto --primary
+            xrandr --output "$bottom_display" --auto --below "$top_display" 2>/dev/null || true
+            ;;
+        left-up)
+            xrandr --output "$top_display" --auto --primary
+            xrandr --output "$bottom_display" --auto --left-of "$top_display" 2>/dev/null || true
+            ;;
+        right-up)
+            xrandr --output "$top_display" --auto --primary
+            xrandr --output "$bottom_display" --auto --right-of "$top_display" 2>/dev/null || true
+            ;;
+    esac
+}
+
+function set-display {
+    if is_x11; then
+        set-display-x11 "$1"
+    else
+        # Wayland - use GNOME display management via dbus or notify user
+        case "$1" in
+            both)
+                echo "Wayland: Both displays enabled. (Use GNOME Settings to disable if needed)"
+                xrandr --output "$top_display" --auto --primary 2>/dev/null || true
+                xrandr --output "$bottom_display" --auto --below "$top_display" 2>/dev/null || true
+                ;;
+            top)
+                echo "Wayland: Cannot disable display. Use GNOME Settings > Displays to turn off bottom screen."
+                echo "Or restart session in X11 for full control."
+                ;;
+            bottom)
+                echo "Wayland: Cannot switch to bottom only. Use GNOME Settings."
+                ;;
+        esac
+    fi
+}
+
+function get-monitor-status {
+    local top_status=$(xrandr 2>/dev/null | grep "$top_display" | grep "connected")
+    local bottom_status=$(xrandr 2>/dev/null | grep "$bottom_display" | grep "connected")
+    
+    if [ -z "$top_status" ] && [ -z "$bottom_status" ]; then
+        echo "none"
+    elif [ -n "$top_status" ] && [ -n "$bottom_status" ]; then
+        echo "both"
+    elif [ -n "$top_status" ]; then
+        echo "top"
+    elif [ -n "$bottom_status" ]; then
+        echo "bottom"
+    fi
+}
+
+function keyboard-is-attached {
+    lsusb 2>/dev/null | grep -i "0b05:1b2c"
+}
+
+function check-session-type {
+    if is_x11; then
+        echo "X11 session - full display control available"
+    else
+        echo "Wayland session - limited display control (use X11 for full support)"
+    fi
+}
+
+case "$1" in
+  session-type|check-session)
+    check-session-type
+    ;;
+  watch-displays)
+    echo "Monitoring keyboard attach/detach..."
+    while true; do
+        if keyboard-is-attached; then
+            set-display top
+        else
+            set-display both
+        fi
+        sleep 3
+    done
+    ;;
+  normal|bottom-up)
+    if keyboard-is-attached; then
+      set-display top
+    else
+      set-display both
+    fi
+    ;;
+  top)
+    set-display top
+    ;;
+  both)
+    set-display both
+    ;;
+  bottom)
+    set-display bottom
+    ;;
+  left-up)
+    set-display left-up
+    ;;
+  right-up)
+    set-display right-up
+    ;;
+  status)
+    get-monitor-status
+    ;;
+  status-full)
+    echo "Session type: $XDG_SESSION_TYPE"
+    echo "Displays:"
+    xrandr --listmonitors 2>/dev/null
+    ;;
+  toggle)
+    current=$(get-monitor-status)
+    if echo "$current" | grep -q "both"; then
+      set-display top
+    else
+      set-display both
+    fi
+    ;;
+  bat-limit)
+    threshold="${2:-80}"
+    echo "$threshold" | suenv tee /sys/class/power_supply/BAT0/charge_control_end_threshold 2>/dev/null
+    echo "Battery limit set to $threshold%"
+    ;;
+  sync-backlight)
+    cat /sys/class/backlight/intel_backlight/brightness 2>/dev/null | \
+      suenv tee /sys/class/backlight/"$backlight"/brightness 2>/dev/null
+    ;;
+  set-kb-backlight)
+    suenv python3 "$(dirname "$0")/bk.py" "$2"
+    ;;
+  watch-backlight)
+    "$0" sync-backlight
+    while inotifywait -e modify /sys/class/backlight/intel_backlight/brightness 2>/dev/null ; do
+      "$0" sync-backlight
+    done
+    ;;
+  model)
+    echo "$MODEL"
+    ;;
+  help|--help|-h)
+    echo "Zenbook Duo Linux - Control Script"
+    echo ""
+    echo "Session: $(check-session-type)"
+    echo ""
+    echo "Usage: duo <command> [args]"
+    echo ""
+    echo "Display Management:"
+    echo "  duo top              - Show only top display"
+    echo "  duo bottom           - Show only bottom display"
+    echo "  duo both             - Show both displays"
+    echo "  duo toggle           - Toggle between top and both"
+    echo "  duo watch-displays   - Auto-detect keyboard"
+    echo "  duo status           - Show current display status"
+    echo "  duo session-type     - Check X11/Wayland"
+    echo ""
+    echo "Brightness:"
+    echo "  duo sync-backlight   - Sync brightness to bottom screen"
+    echo "  duo watch-backlight  - Auto-sync brightness"
+    echo ""
+    echo "Battery:"
+    echo "  duo bat-limit [n]    - Set battery charge limit (default: 80)"
+    echo ""
+    echo "Keyboard:"
+    echo "  duo set-kb-backlight <0-3> - Set keyboard backlight"
+    echo ""
+    echo "NOTE: For full display control, use X11 session instead of Wayland."
+    ;;
+  *)
+    echo "Usage: duo <top|bottom|both|toggle|status|session-type|bat-limit|sync-backlight|set-kb-backlight|watch-backlight|watch-displays|help>"
+    exit 1
+esac

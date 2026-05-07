@@ -1,0 +1,11 @@
+[Unit]
+Description=Zenbook Duo brightness sync service
+After=graphical.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/duo watch-backlight
+Restart=on-failure
+
+[Install]
+WantedBy=graphical.target

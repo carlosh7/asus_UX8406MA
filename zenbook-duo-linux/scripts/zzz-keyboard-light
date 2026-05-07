@@ -1,0 +1,32 @@
+#!/bin/bash
+# Fixed keyboard light control on suspend/resume
+
+BK_SCRIPT="/usr/local/bin/bk.py"
+ALS_PATH="/sys/bus/iio/devices/iio:device0"
+
+echo "$(date): Hook called with $1" >> /tmp/keyboard-suspend.log
+
+case "$1" in
+    pre)
+        python3 "$BK_SCRIPT" 0 2>/dev/null
+        echo "PRE (suspend): OFF" >> /tmp/keyboard-suspend.log
+        ;;
+    post)
+        sleep 1
+        lux=$(cat "$ALS_PATH" 2>/dev/null)
+        echo "POST (resume): lux=$lux" >> /tmp/keyboard-suspend.log
+        
+        if [ "$lux" -lt 500 ]; then
+            level=3
+        elif [ "$lux" -lt 2000 ]; then
+            level=2
+        elif [ "$lux" -lt 10000 ]; then
+            level=1
+        else
+            level=0
+        fi
+        
+        python3 "$BK_SCRIPT" "$level" 2>/dev/null
+        echo "POST (resume): level=$level" >> /tmp/keyboard-suspend.log
+        ;;
+esac
