@@ -22,6 +22,8 @@ apt-get install -y -qq \
     inotify-tools \
     lm-sensors \
     iio-sensor-proxy \
+    easyeffects \
+    lsp-plugins \
     usbutils \
     build-essential 2>/dev/null || true
 
@@ -31,6 +33,22 @@ cp -r "$REPO_DIR/scripts/"* "$BIN_DIR/"
 chmod +x "$BIN_DIR/duo" "$BIN_DIR/bk.py" "$BIN_DIR/fn-lock.py"
 chmod +x "$BIN_DIR/auto-display.sh" "$BIN_DIR/light-monitor.sh" "$BIN_DIR/start.sh"
 chmod +x "$BIN_DIR/toggle-bluetooth.sh" "$BIN_DIR/kb-light-cycle.sh" "$BIN_DIR/setup-hotkeys.sh"
+
+echo ""
+echo "[2.1/6] Configuring Audio Optimizations..."
+# Copy EasyEffects profile for current user and root (to be safe)
+mkdir -p "$HOME/.config/easyeffects/output/"
+cp "$REPO_DIR/config/easyeffects/output/ZenbookDuo.json" "$HOME/.config/easyeffects/output/" 2>/dev/null || true
+if [ -n "$SUDO_USER" ]; then
+    USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    mkdir -p "$USER_HOME/.config/easyeffects/output/"
+    cp "$REPO_DIR/config/easyeffects/output/ZenbookDuo.json" "$USER_HOME/.config/easyeffects/output/"
+    chown -R "$SUDO_USER:$SUDO_USER" "$USER_HOME/.config/easyeffects/"
+fi
+
+# Set kernel options for speakers
+echo "options snd-hda-intel model=asus-zenbook" > /etc/modprobe.d/zenbook-duo-audio.conf
+echo "options snd-sof-intel-hda-common hda_model=asus-zenbook" >> /etc/modprobe.d/zenbook-duo-audio.conf
 
 echo ""
 echo "[3/6] Setting up sudoers (for keyboard backlight without password)..."
@@ -61,6 +79,11 @@ EOF
 echo ""
 echo "[5/6] Enabling battery limit..."
 echo 80 | tee /sys/class/power_supply/BAT0/charge_control_end_threshold > /dev/null 2>&1 || true
+
+echo ""
+echo "[6/6] Finalizing Audio Levels..."
+amixer -c 0 sset Master 100% 2>/dev/null || true
+amixer -c 0 sset Speaker 100% 2>/dev/null || true
 
 echo ""
 echo "=============================================="
