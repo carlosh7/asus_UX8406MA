@@ -139,19 +139,25 @@ function set-display {
     if is_x11; then
         set-display-x11 "$1"
     else
-        # Wayland - use GNOME display management via dbus or notify user
+        # Wayland - use native DBus management
         case "$1" in
-            both)
-                echo "Wayland: Both displays enabled. (Use GNOME Settings to disable if needed)"
-                xrandr --output "$top_display" --auto --primary 2>/dev/null || true
-                xrandr --output "$bottom_display" --auto --below "$top_display" 2>/dev/null || true
-                ;;
-            top)
-                echo "Wayland: Cannot disable display. Use GNOME Settings > Displays to turn off bottom screen."
-                echo "Or restart session in X11 for full control."
+            both|top)
+                local user_id=$(id -u carlosh)
+                # Apply display config via DBus (Wayland native)
+                sudo -u carlosh DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$user_id/bus \
+                    /usr/local/bin/wayland-display-mgr.py "$1" 2>/dev/null || \
+                echo "Wayland: Failed to apply config via DBus."
+                
+                # Handle backlight for instant feedback
+                if [ "$1" = "top" ]; then
+                    echo 0 | sudo tee /sys/class/backlight/"$backlight"/brightness >/dev/null 2>&1 || true
+                else
+                    # Restore brightness when turning back on
+                    cat /sys/class/backlight/intel_backlight/brightness | sudo tee /sys/class/backlight/"$backlight"/brightness >/dev/null 2>&1 || true
+                fi
                 ;;
             bottom)
-                echo "Wayland: Cannot switch to bottom only. Use GNOME Settings."
+                echo "Wayland: Cannot switch to bottom only via script yet."
                 ;;
         esac
     fi
@@ -263,8 +269,12 @@ case "$1" in
     echo "Battery limit set to $threshold%"
     ;;
   sync-backlight)
-    cat /sys/class/backlight/intel_backlight/brightness 2>/dev/null | \
-      suenv tee /sys/class/backlight/"$backlight"/brightness 2>/dev/null
+    if keyboard-is-attached; then
+      echo 0 | suenv tee /sys/class/backlight/"$backlight"/brightness >/dev/null 2>&1 || true
+    else
+      cat /sys/class/backlight/intel_backlight/brightness 2>/dev/null | \
+        suenv tee /sys/class/backlight/"$backlight"/brightness >/dev/null 2>&1 || true
+    fi
     ;;
   set-kb-backlight)
     suenv python3 "$(dirname "$0")/bk.py" "$2"
