@@ -9,8 +9,21 @@ Controla el estado de las dos pantallas OLED de tu Zenbook:
 - `duo top`: Mantiene encendida solo la pantalla principal (superior).
 - `duo bottom`: Enciende solo la pantalla inferior.
 - `duo both`: Enciende ambas pantallas (modo extendido).
+- `duo save-ext`: Guarda la posición y el **escalado** actual de tus monitores externos para que el sistema los recuerde siempre.
 - `duo toggle`: Cambia rápidamente entre el modo de una pantalla y el de dos.
 - `duo watch-displays`: Inicia el monitoreo automático. Si acoplas el teclado, se apaga la pantalla inferior; si lo retiras, se enciende.
+
+## 🖥️ Escalado y Monitores Externos
+
+Si usas monitores externos, se recomienda encarecidamente usar una sesión de **Wayland** (por defecto en Ubuntu 24.04). En Wayland puedes ajustar la escala de cada monitor individualmente desde la configuración de GNOME.
+
+Si decides permanecer en **X11**, GNOME no te permitirá escalas diferentes. En ese caso, usa:
+```bash
+# Ajustar escala manualmente en X11
+xrandr --output HDMI-1 --scale 1.25x1.25
+# Guardar para que el daemon lo respete
+duo save-ext
+```
 
 ## 🔋 Batería y Energía
 

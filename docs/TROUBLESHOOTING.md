@@ -58,6 +58,26 @@ xrandr --output eDP-2 --auto
 xrandr --output eDP-2 --below eDP-1
 ```
 
+#### "Apply" button is greyed out/disabled
+**Problem**: GNOME Settings doesn't let you apply display changes.
+
+**Causes**: 
+1. The `zenbook-duo` daemon is conflicting with manual changes.
+2. Monitor overlap (e.g., HDMI-1 at 0x0 while eDP-1 is also at 0x0).
+3. X11 limitation with mixed scales.
+
+**Solution**:
+1. Stop the daemon: `sudo systemctl stop zenbook-duo`
+2. Correct the position manually: `xrandr --output HDMI-1 --auto --right-of eDP-1`
+3. Save the layout: `duo save-ext`
+4. Switch to **Wayland** for a better multi-monitor experience.
+
+#### No per-monitor scale option
+**Problem**: Only one global scale is available for all monitors.
+
+**Solution**: This is a limitation of GNOME on X11. Switch to a **Wayland** session to enable independent scaling per monitor.
+Alternatively, use `xrandr --output <monitor> --scale 1.25x1.25` and then `duo save-ext`.
+
 ---
 
 ### Brightness

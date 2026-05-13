@@ -43,17 +43,27 @@ function detect-model {
     fi
 }
 
+function has_external_monitor {
+    xrandr 2>/dev/null | grep " connected" | grep -v "eDP-1" | grep -v "eDP-2" | grep -q "."
+    return $?
+}
+
 MODEL=$(detect-model)
 
 if [ "$MODEL" = "3k" ]; then
-  preferred_resolution="2880x1800@120.000"
+  if has_external_monitor; then
+    preferred_resolution="2880x1800@60.00"
+    echo "Monitor externo detectado: limitando paneles internos a 60Hz para estabilidad."
+  else
+    preferred_resolution="2880x1800@120.00"
+  fi
   backlight="card1-eDP-2-backlight"
   ui_scale=1.75
   y_offset=1030
   top_display="eDP-1"
   bottom_display="eDP-2"
 else
-  preferred_resolution="1920x1200@60.003"
+  preferred_resolution="1920x1200@60.03"
   backlight="card1-eDP-2-backlight"
   ui_scale=1
   y_offset=1200
@@ -65,29 +75,62 @@ function suenv {
     sudo /usr/bin/env "$@"
 }
 
+function get_external_monitors {
+    xrandr 2>/dev/null | grep " connected" | grep -v "eDP-1" | grep -v "eDP-2" | awk '{print $1}'
+}
+
+CONFIG_FILE="/etc/zenbook-duo/external_layout.conf"
+
+function get_external_args {
+    local ext_monitors=$(xrandr 2>/dev/null | grep " connected" | grep -v "eDP-1" | grep -v "eDP-2" | awk '{print $1}')
+    local args=""
+    
+    for mon in $ext_monitors; do
+        # Try to find saved position and scale in config file (format: NAME POS SCALE)
+        local line=$(grep "^$mon " "$CONFIG_FILE" 2>/dev/null)
+        local saved_pos=$(echo "$line" | awk '{print $2}')
+        local saved_scale=$(echo "$line" | awk '{print $3}')
+        
+        local mon_args="--output $mon --auto"
+        
+        if [ -n "$saved_pos" ]; then
+            mon_args="$mon_args --pos $saved_pos"
+        else
+            mon_args="$mon_args --right-of $top_display"
+        fi
+        
+        if [ -n "$saved_scale" ]; then
+            mon_args="$mon_args --scale $saved_scale"
+        fi
+        
+        args="$args $mon_args"
+    done
+    echo "$args"
+}
+
 function set-display-x11 {
     local mode="$1"
+    local ext_args=$(get_external_args)
+    
+    # Parse preferred resolution and rate
+    local res="${preferred_resolution%@*}"
+    local rate="${preferred_resolution#*@}"
+    local mode_args="--mode $res --rate $rate"
     
     case "$mode" in
         top)
-            xrandr --output "$top_display" --auto --primary
+            xrandr --output "$top_display" $mode_args --primary $ext_args
             xrandr --output "$bottom_display" --off 2>/dev/null || true
+            echo 0 | sudo tee /sys/class/backlight/"$backlight"/brightness >/dev/null 2>&1 || true
             ;;
         bottom)
-            xrandr --output "$bottom_display" --auto --primary
+            xrandr --output "$bottom_display" $mode_args --primary $ext_args
             xrandr --output "$top_display" --off 2>/dev/null || true
             ;;
         both)
-            xrandr --output "$top_display" --auto --primary
-            xrandr --output "$bottom_display" --auto --below "$top_display" 2>/dev/null || true
-            ;;
-        left-up)
-            xrandr --output "$top_display" --auto --primary
-            xrandr --output "$bottom_display" --auto --left-of "$top_display" 2>/dev/null || true
-            ;;
-        right-up)
-            xrandr --output "$top_display" --auto --primary
-            xrandr --output "$bottom_display" --auto --right-of "$top_display" 2>/dev/null || true
+            xrandr --output "$top_display" $mode_args --primary --output "$bottom_display" $mode_args --below "$top_display" $ext_args 2>/dev/null || true
+            # Restore brightness
+            cat /sys/class/backlight/intel_backlight/brightness | sudo tee /sys/class/backlight/"$backlight"/brightness >/dev/null 2>&1 || true
             ;;
     esac
 }
@@ -115,17 +158,17 @@ function set-display {
 }
 
 function get-monitor-status {
-    local top_status=$(xrandr 2>/dev/null | grep "$top_display" | grep "connected")
-    local bottom_status=$(xrandr 2>/dev/null | grep "$bottom_display" | grep "connected")
+    local top_status=$(xrandr 2>/dev/null | grep "$top_display" | grep "connected [0-9]")
+    local bottom_status=$(xrandr 2>/dev/null | grep "$bottom_display" | grep "connected [0-9]")
     
-    if [ -z "$top_status" ] && [ -z "$bottom_status" ]; then
-        echo "none"
-    elif [ -n "$top_status" ] && [ -n "$bottom_status" ]; then
+    if [ -n "$top_status" ] && [ -n "$bottom_status" ]; then
         echo "both"
     elif [ -n "$top_status" ]; then
         echo "top"
     elif [ -n "$bottom_status" ]; then
         echo "bottom"
+    else
+        echo "none"
     fi
 }
 
@@ -144,6 +187,26 @@ function check-session-type {
 case "$1" in
   session-type|check-session)
     check-session-type
+    ;;
+  save-ext)
+    # Save current positions and scales of external monitors
+    # Format from xrandr: HDMI-1 connected 1920x1080+2880+0
+    xrandr | grep " connected" | grep -v "eDP" | while read -r line; do
+        name=$(echo "$line" | awk '{print $1}')
+        # Extract the +X+Y part and convert to XxY
+        pos=$(echo "$line" | grep -oP '\+\d+\+\d+' | sed 's/+//' | sed 's/+/x/')
+        # Extract scale from 'xrandr --verbose'
+        # Looking for the first number after 'Transform:'
+        scale=$(xrandr --verbose | grep -A 1 "^$name connected" -A 10 | grep "Transform:" | awk '{print $2}')
+        # Convert 1.250000 to 1.25
+        scale=$(echo "$scale" | sed 's/\.0*$//' | sed 's/\.$//')
+        if [ -z "$scale" ] || [ "$scale" = "1" ]; then scale="1x1"; else scale="${scale}x${scale}"; fi
+        
+        if [ -n "$pos" ]; then
+            echo "$name $pos $scale"
+        fi
+    done | sudo tee "$CONFIG_FILE" > /dev/null
+    echo "Diseño de monitores externos guardado en $CONFIG_FILE"
     ;;
   watch-displays)
     echo "Monitoring keyboard attach/detach..."
@@ -226,6 +289,7 @@ case "$1" in
     echo "  duo top              - Show only top display"
     echo "  duo bottom           - Show only bottom display"
     echo "  duo both             - Show both displays"
+    echo "  duo save-ext         - Save current external monitor layout"
     echo "  duo toggle           - Toggle between top and both"
     echo "  duo watch-displays   - Auto-detect keyboard"
     echo "  duo status           - Show current display status"
@@ -244,6 +308,6 @@ case "$1" in
     echo "NOTE: For full display control, use X11 session instead of Wayland."
     ;;
   *)
-    echo "Usage: duo <top|bottom|both|toggle|status|session-type|bat-limit|sync-backlight|set-kb-backlight|watch-backlight|watch-displays|help>"
+    echo "Usage: duo <top|bottom|both|save-ext|toggle|status|session-type|bat-limit|sync-backlight|set-kb-backlight|watch-backlight|watch-displays|help>"
     exit 1
 esac

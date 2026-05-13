@@ -149,8 +149,9 @@ int main(int argc, char *argv[]) {
         
         while (running) {
             int kb_usb = keyboard_attached_usb();
-            int kb_bt = keyboard_attached_bt();
-            int kb_attached = (kb_usb > 0 || kb_bt > 0);
+            // We ignore Bluetooth for display switching because the keyboard 
+            // stays connected via BT when detached from the screen.
+            int kb_attached = (kb_usb > 0);
             
             if (last_kb_state != kb_attached) {
                 last_kb_state = kb_attached;
