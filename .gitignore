@@ -1,0 +1,7 @@
+*.o
+*.out
+zenbook-duo
+daemon/zenbook-duo
+__pycache__/
+*.pyc
+.DS_Store
