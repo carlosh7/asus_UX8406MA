@@ -1,0 +1,12 @@
+[Unit]
+Description=Microphone gain boost for internal Digital Microphone
+After=pipewire.service wireplumber.service
+Requires=pipewire.service wireplumber.service
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/mic-boost.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target
