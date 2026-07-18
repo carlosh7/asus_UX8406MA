@@ -1,25 +1,23 @@
 #!/bin/bash
 # ============================================================================
-# Zenbook Duo Linux - Unified Keyboard Backlight Manager v2
-# Fixes: inactivity-first logic, state machine, 4 levels, 30s timeout
+# Zenbook Duo Linux - Unified Keyboard Backlight Manager v3
+# v3: Level 1 fixed when active + debounce (10s minimum between changes)
 # ============================================================================
 
 BK_SCRIPT="/usr/local/bin/bk.py"
 ALS_PATH=$(ls /sys/bus/iio/devices/iio:device*/in_illuminance_raw 2>/dev/null | head -n 1)
 STATE_FILE="/tmp/zenbook-kb-backlight.state"
+TIMESTAMP_FILE="/tmp/zenbook-kb-backlight.timestamp"
 LOG_FILE="/var/log/zenbook-kb-backlight.log"
 
 # --- Configuration -----------------------------------------------------------
 
 CHECK_INTERVAL=3            # Seconds between checks
 INACTIVITY_TIMEOUT=30000    # 30 seconds idle -> turn off backlight
+DEBOUNCE_SEC=10             # Minimum seconds between level changes
 
 # Light thresholds (raw ALS values, scale=0.001)
-# 272 raw = 0.27 lux (dark room), 2500+ = bright room
 LIGHT_BRIGHT=2500     # >2500 raw -> level 0 (off, bright enough)
-LIGHT_DIM=1500        # >1500 raw -> level 1 (dim)
-LIGHT_DARK=500        # >500 raw  -> level 2 (dark)
-                        # <=500 raw -> level 3 (pitch black)
 
 # --- Functions ---------------------------------------------------------------
 
@@ -58,17 +56,19 @@ get_ambient_light() {
 
 get_light_level() {
     local lux="$1"
-    if [ -z "$lux" ] || [ "$lux" -eq 0 ] 2>/dev/null; then
-        echo "1"   # lux=0 or empty -> dark (safe default: on)
-    elif [ "$lux" -gt "$LIGHT_BRIGHT" ] 2>/dev/null; then
+    if [ "$lux" -gt "$LIGHT_BRIGHT" ] 2>/dev/null; then
         echo "0"   # Bright -> off
-    elif [ "$lux" -gt "$LIGHT_DIM" ] 2>/dev/null; then
-        echo "1"   # Dim -> level 1
-    elif [ "$lux" -gt "$LIGHT_DARK" ] 2>/dev/null; then
-        echo "2"   # Dark -> level 2
     else
-        echo "3"   # Pitch black -> level 3
+        echo "1"   # Any dark condition -> level 1 (fixed, no fluctuation)
     fi
+}
+
+# Debounce: only change if enough time passed since last change
+debounce_ok() {
+    local now=$(date +%s)
+    local last_change=$(cat "$TIMESTAMP_FILE" 2>/dev/null || echo "0")
+    local elapsed=$((now - last_change))
+    [ "$elapsed" -ge "$DEBOUNCE_SEC" ]
 }
 
 set_keyboard_backlight() {
@@ -76,9 +76,16 @@ set_keyboard_backlight() {
     local current_level=$(cat "$STATE_FILE" 2>/dev/null || echo "-1")
 
     if [ "$level" != "$current_level" ]; then
+        # Debounce: skip if last change was < DEBOUNCE_SEC ago
+        # Exception: allow turning OFF (level 0) immediately
+        if [ "$level" != "0" ] && ! debounce_ok; then
+            return 0
+        fi
+
         python3 "$BK_SCRIPT" "$level" 2>/dev/null
         if [ $? -eq 0 ]; then
             echo "$level" > "$STATE_FILE"
+            date +%s > "$TIMESTAMP_FILE"
             log_msg "Backlight: $current_level -> $level"
         fi
     fi
@@ -91,7 +98,7 @@ keyboard_is_attached() {
 # --- Main Loop ---------------------------------------------------------------
 
 ALS_PATH=$(resolve_als_path)
-log_msg "Starting v2 | ALS: $ALS_PATH | Timeout: ${INACTIVITY_TIMEOUT}ms"
+log_msg "Starting v3 | ALS: $ALS_PATH | Timeout: ${INACTIVITY_TIMEOUT}ms | Debounce: ${DEBOUNCE_SEC}s"
 echo "2" > "$STATE_FILE"
 
 PREV_IDLE_STATE="active"   # "active" or "idle"
@@ -116,7 +123,7 @@ while true; do
         fi
         set_keyboard_backlight "0"
     else
-        # ACTIVE: restore backlight based on ambient light
+        # ACTIVE: restore backlight (level 1 if dark, level 0 if bright)
         if [ "$PREV_IDLE_STATE" = "idle" ]; then
             log_msg "Activity detected (${idle_ms}ms) -> restoring"
             PREV_IDLE_STATE="active"
