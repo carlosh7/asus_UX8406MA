@@ -1,110 +1,99 @@
-# ASUS Zenbook Duo (2024) Linux Support
+# ASUS Zenbook Duo 2024 Linux Support — UX8406MA Driver & Utilities
 
-Optimización integral de hardware para la **ASUS Zenbook Duo 2024 (UX8406MA)** en Linux. Este proyecto proporciona soporte completo para la gestión de doble pantalla, comportamiento del teclado, rendimiento de audio, refrigeración y conectividad.
-
-## Distribuciones Soportadas
-- **Ubuntu 24.04+** (y derivados como Pop!_OS, Mint)
-- **Arch Linux** (y derivados como Manjaro, EndeavourOS)
-- **Debian 12+**
+**Complete Linux hardware support for ASUS Zenbook Duo 2024 (UX8406MA).** One-command install for Ubuntu, Arch, and Debian.
 
 ---
 
-## Guía para Principiantes (Paso a Paso)
+## What This Does
 
-### 1. Abrir la Terminal
-Presiona `Ctrl + Alt + T` para abrir tu terminal.
+| Feature | Status |
+|---------|--------|
+| **Dual Screen Management** | Auto-switch bottom screen on keyboard attach/detach |
+| **Touch Screen Mapping** | Both screens respond to touch correctly |
+| **Keyboard Backlight** | Auto-adjusts based on ambient light |
+| **Adaptive Brightness** | Screen brightness adapts to environment with manual override |
+| **Thermal Control** | Auto fan profile based on CPU temperature |
+| **Audio Profiles** | EasyEffects config for 4-speaker system |
+| **WiFi Optimization** | iwlwifi config to prevent soft lockups |
+| **Battery Protection** | Charge limit (default 80%) |
 
-### 2. Descargar el proyecto
+---
+
+## Quick Install
+
 ```bash
 git clone https://github.com/carlosh7/asus_UX8406MA.git
 cd asus_UX8406MA
-```
-
-### 3. Ejecutar el Instalador
-```bash
 sudo ./install/install.sh
 ```
 
-### 4. Reiniciar tu equipo
-Para que todos los cambios surtan efecto.
-
-### 5. Toque Final: Audio
-Abre **EasyEffects** y selecciona el perfil **ZenbookDuo**.
+Then restart your session.
 
 ---
 
-## Características Principales
+## Supported Hardware
 
-### Gestión de Pantallas
-- **Pantalla Dual**: Apaga/enciende la pantalla inferior automáticamente al acoplar o retirar el teclado.
-- **Soporte Wayland**: Control completo vía DBus de GNOME Mutter.
-- **Monitores Externos**: Guarda y restaura posiciones de monitores externos.
-- **Sincronización de Brillo**: Mantiene ambas pantallas con el mismo nivel de brillo.
-
-### Audio
-- **Perfiles EasyEffects**: Configuración optimizada para el sistema de 4 altavoces.
-- **Corrección de Sobre-amplificación**: Previene distorsión y clipping.
-- **Soporte CS35L41**: Drivers para amplificadores inteligentes Cirrus Logic.
-
-### Refrigeración
-- **Monitoreo Térmico**: Supervisa temperatura del CPU y ajusta automáticamente el perfil de ventilador.
-- **Perfiles Adaptativos**: Cambia entre quiet/balanced/performance según la temperatura.
-
-### Brillo
-- **Brillo Adaptativo**: Se ajusta según la luz ambiental con calibración predefinida.
-- **Pausa Manual**: Si ajustas el brillo manualmente, se mantiene hasta que la luz cambie.
-- **Retroiluminación Inteligente**: Se enciende en oscuridad y se apaga con inactividad.
-
-### Conectividad
-- **WiFi Optimizado**: Configuración iwlwifi para prevenir soft lockups.
-- **Diagnóstico WiFi**: Script completo para verificar hardware, driver, señal y errores.
-- **Bluetooth**: Toggle rápido con `F10`.
-
-### Teclado
-- **Hotkeys**: Atajos de teclado configurados (`F1-F12`).
-- **Fn-Lock**: Alterna entre teclas de medios y funciones.
-
-### Batería
-- **Límite de Carga**: Configura un límite (por defecto 80%) para prolongar la vida útil.
+- **Model**: ASUS Zenbook Duo 2024 (UX8406MA)
+- **Display**: Dual 3K OLED (2880x1800 @ 120Hz)
+- **Touch**: Dual ELAN touch controllers
+- **Audio**: Realtek ALC294 + CS35L41 smart amplifiers
+- **WiFi**: Intel Meteor Lake CNVi
+- **Keyboard**: USB + Bluetooth dual-mode
 
 ---
 
-## Comandos Principales
+## Commands
 
 ```bash
-# Gestión de pantallas
-duo top|bottom|both    # Cambiar modo de pantalla
-duo toggle             # Alternar entre top/both
-duo status             # Ver estado actual
+# Display
+duo top              # Top screen only
+duo both             # Both screens
+duo toggle           # Toggle mode
+duo status           # Current state
 
-# Monitores externos
-duo ext-position save    # Guardar posiciones
-duo ext-position restore # Restaurar posiciones
-duo ext-position list    # Ver posiciones actuales
+# Brightness
+duo set-kb-backlight 0-3    # Keyboard backlight
+duo sync-backlight          # Sync screen brightness
 
-# Batería y brillo
-duo bat-limit 80       # Establecer límite de batería
-duo set-kb-backlight 2 # Ajustar brillo del teclado
+# Battery
+duo bat-limit 80            # Set charge limit
 
-# Diagnóstico
-test_hardware.sh       # Test completo del sistema
-audio-diagnose.sh      # Diagnóstico de audio
-wifi-diagnose.sh       # Diagnóstico de WiFi
+# Diagnostics
+test_hardware.sh            # Full system test
+audio-diagnose.sh           # Audio check
+wifi-diagnose.sh            # WiFi check
 ```
 
-Para ver todos los comandos: `duo help`
+---
+
+## Supported Distributions
+
+| Distro | Status |
+|--------|--------|
+| Ubuntu 24.04+ | ✅ Full support |
+| Arch Linux | ✅ Full support |
+| Debian 12+ | ✅ Full support |
+| Pop!_OS, Mint | ✅ Should work |
 
 ---
 
-## Documentación
-- [Guía de Uso y Comandos](USAGE.md)
-- [Guía Detallada de Instalación](INSTALL.md)
-- [Especificaciones de Hardware](SPEC.md)
+## Documentation
+
+- [Installation Guide](INSTALL.md)
+- [Command Reference](USAGE.md)
+- [Hardware Specs](SPEC.md)
 
 ---
 
-## Créditos
-Basado en el excelente trabajo de:
-- `alesya-h`: Scripts originales de gestión de pantalla.
-- `valirc`: Daemon en C para detección de teclado.
-- `asus-linux.org`: Soporte general para Asus en Linux.
+## Credits
+
+Based on work by:
+- [alesya-h](https://github.com/alesya-h/zenbook-duo-2024-ux8406ma-linux) — Original display scripts
+- [valirc](https://github.com/valirc/zenbook-duo-2024-ux8406daemon) — C daemon
+- [zakstam](https://github.com/zakstam/zenbook-duo-linux) — Rust implementation
+
+---
+
+## License
+
+BSD-2-Clause
