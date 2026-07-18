@@ -53,14 +53,14 @@ echo ""
 # 4. Display
 echo "🖥️  DISPLAY"
 echo "──────────"
-if [ -f /sys/class/drm/card0-eDP-1/status ]; then
-    echo "  ✅ eDP-1: $(cat /sys/class/drm/card0-eDP-1/status)"
+if [ -f /sys/class/drm/card1-eDP-1/status ]; then
+    echo "  ✅ eDP-1: $(cat /sys/class/drm/card1-eDP-1/status)"
 else
     echo "  ❌ eDP-1 not found"
     ERRORS=$((ERRORS + 1))
 fi
-if [ -f /sys/class/drm/card0-eDP-2/status ]; then
-    echo "  ✅ eDP-2: $(cat /sys/class/drm/card0-eDP-2/status)"
+if [ -f /sys/class/drm/card1-eDP-2/status ]; then
+    echo "  ✅ eDP-2: $(cat /sys/class/drm/card1-eDP-2/status)"
 else
     echo "  ⚠️  eDP-2 not found"
     WARNINGS=$((WARNINGS + 1))
@@ -106,7 +106,7 @@ echo ""
 # 7. Audio
 echo "🔊 AUDIO"
 echo "────────"
-if pactl info 2>/dev/null | grep -q "PipeWire"; then
+if pgrep -x pipewire >/dev/null 2>&1; then
     echo "  ✅ PipeWire active"
 else
     echo "  ❌ PipeWire not active"
@@ -118,7 +118,7 @@ echo ""
 echo "🔒 SEGURIDAD"
 echo "────────────"
 UFW_STATUS=$(ufw status 2>/dev/null | head -1)
-if echo "$UFW_STATUS" | grep -q "active"; then
+if echo "$UFW_STATUS" | grep -qiE "active|activo"; then
     echo "  ✅ UFW: active"
 else
     echo "  ❌ UFW: inactive"
