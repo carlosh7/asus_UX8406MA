@@ -4,11 +4,16 @@ After=graphical.target
 
 [Service]
 Type=simple
+User=carlosh
+Group=carlosh
 ExecStart=/usr/local/bin/kb-backlight-unified.sh
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/run/user/1000/.mutter-Xwaylandauth.XXXXXX
 
 [Install]
 WantedBy=graphical.target

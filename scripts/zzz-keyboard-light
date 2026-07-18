@@ -1,32 +1,57 @@
 #!/bin/bash
-# Fixed keyboard light control on suspend/resume
+# Zenbook Duo - Keyboard Backlight on Suspend/Resume
+# v2: Fixed ALS path, longer wait, dynamic resolution
 
 BK_SCRIPT="/usr/local/bin/bk.py"
-ALS_PATH="/sys/bus/iio/devices/iio:device0"
+STATE_FILE="/tmp/zenbook-kb-backlight.state"
+LOG_FILE="/var/log/zenbook-kb-backlight.log"
 
-echo "$(date): Hook called with $1" >> /tmp/keyboard-suspend.log
+# Resolve ALS path dynamically (find sensor named "als")
+ALS_PATH=""
+for dev in /sys/bus/iio/devices/iio:device*/name; do
+    if [ "$(cat "$dev" 2>/dev/null)" = "als" ]; then
+        ALS_PATH="$(dirname "$dev")/in_illuminance_raw"
+        break
+    fi
+done
+
+log_msg() {
+    echo "[$(date '+%H:%M:%S')] $1" >> "$LOG_FILE" 2>/dev/null
+}
+
+get_light_level() {
+    local lux="$1"
+    if [ -z "$lux" ] || [ "$lux" -eq 0 ] 2>/dev/null; then
+        echo "1"   # sensor not ready -> safe default (on)
+    elif [ "$lux" -gt 2500 ] 2>/dev/null; then
+        echo "0"   # Bright -> off
+    elif [ "$lux" -gt 1500 ] 2>/dev/null; then
+        echo "1"   # Dim -> level 1
+    elif [ "$lux" -gt 500 ] 2>/dev/null; then
+        echo "2"   # Dark -> level 2
+    else
+        echo "3"   # Pitch black -> level 3
+    fi
+}
 
 case "$1" in
     pre)
+        # Before suspend: turn off keyboard backlight
         python3 "$BK_SCRIPT" 0 2>/dev/null
-        echo "PRE (suspend): OFF" >> /tmp/keyboard-suspend.log
+        echo "0" > "$STATE_FILE"
+        log_msg "Suspend: backlight OFF"
         ;;
     post)
-        sleep 1
-        lux=$(cat "$ALS_PATH" 2>/dev/null)
-        echo "POST (resume): lux=$lux" >> /tmp/keyboard-suspend.log
-        
-        if [ "$lux" -lt 500 ]; then
-            level=3
-        elif [ "$lux" -lt 2000 ]; then
-            level=2
-        elif [ "$lux" -lt 10000 ]; then
-            level=1
+        # After resume: wait for sensors to initialize, then restore
+        sleep 3
+        if [ -n "$ALS_PATH" ] && [ -f "$ALS_PATH" ]; then
+            lux=$(cat "$ALS_PATH" 2>/dev/null)
         else
-            level=0
+            lux=0
         fi
-        
+        level=$(get_light_level "$lux")
         python3 "$BK_SCRIPT" "$level" 2>/dev/null
-        echo "POST (resume): level=$level" >> /tmp/keyboard-suspend.log
+        echo "$level" > "$STATE_FILE"
+        log_msg "Resume: lux=$lux -> level=$level"
         ;;
 esac

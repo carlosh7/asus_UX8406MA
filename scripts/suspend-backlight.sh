@@ -34,14 +34,14 @@ case "$1" in
         sleep 1  # Wait for USB devices to initialize
         if keyboard_attached; then
             level=$(get_light_level)
-            sudo -n python3 "$BK_SCRIPT" "$level" 2>/dev/null
+            python3 "$BK_SCRIPT" "$level" 2>/dev/null
             echo "$level" > /tmp/zenbook-kb-backlight.state
             echo "[$(date '+%H:%M:%S')] Resume: backlight set to $level" >> /var/log/zenbook-kb-backlight.log
         fi
         ;;
     pre)
         # Before suspend - turn off keyboard backlight
-        sudo -n python3 "$BK_SCRIPT" 0 2>/dev/null
+        python3 "$BK_SCRIPT" 0 2>/dev/null
         echo "0" > /tmp/zenbook-kb-backlight.state
         echo "[$(date '+%H:%M:%S')] Suspend: backlight off" >> /var/log/zenbook-kb-backlight.log
         ;;

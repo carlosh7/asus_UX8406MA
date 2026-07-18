@@ -86,7 +86,7 @@ restore_config() {
     # Restore keyboard backlight
     if [ -n "$keyboard_level" ]; then
         echo "Restoring keyboard backlight: $keyboard_level"
-        sudo -n python3 /usr/local/bin/bk.py "$keyboard_level" 2>/dev/null
+        python3 /usr/local/bin/bk.py "$keyboard_level" 2>/dev/null
         echo "$keyboard_level" > /tmp/zenbook-kb-backlight.state
     fi
     
