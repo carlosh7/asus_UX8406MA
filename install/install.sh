@@ -43,22 +43,13 @@ else
     OS="unknown"
 fi
 
-echo "[1/7] Installing dependencies for $OS..."
-
-install_pkg() {
-    local pkg="$1"
-    if command -v "$pkg" &>/dev/null || dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
-        return 0
-    fi
-    return 1
-}
+echo "[1/8] Installing dependencies for $OS..."
 
 case "$OS" in
     ubuntu|debian|pop|linuxmint)
         apt-get update -qq
 
-        # Critical dependencies - abort if these fail
-        CRITICAL_PKGS="python3 python3-usb python3-dbus inotify-tools usbutils build-essential gcc make pkg-config libusb-1.0-0-dev libglib2.0-dev iw xdotool"
+        CRITICAL_PKGS="python3 python3-usb python3-dbus inotify-tools usbutils build-essential gcc make pkg-config libusb-1.0-0-dev libglib2.0-dev iw xdotool evtest"
         echo "  Installing critical packages..."
         if ! apt-get install -y -qq $CRITICAL_PKGS 2>/dev/null; then
             echo "ERROR: Failed to install critical dependencies."
@@ -66,25 +57,23 @@ case "$OS" in
             ERRORS=$((ERRORS + 1))
         fi
 
-        # Optional dependencies - warn but continue
-        OPTIONAL_PKGS="lm-sensors iio-sensor-proxy easyeffects lsp-plugins"
+        OPTIONAL_PKGS="lm-sensors iio-sensor-proxy easyeffects lsp-plugins guvcview v4l2-utils"
         echo "  Installing optional packages..."
         apt-get install -y -qq $OPTIONAL_PKGS 2>/dev/null || {
             echo "  WARNING: Some optional packages failed to install."
-            echo "  Audio features (EasyEffects) may not work."
         }
         ;;
     arch|manjaro|endeavouros)
         pacman -Sy --noconfirm
 
-        CRITICAL_PKGS="python python-pyusb python-dbus inotify-tools usbutils base-devel libusb glib2 iw xdotool"
+        CRITICAL_PKGS="python python-pyusb python-dbus inotify-tools usbutils base-devel libusb glib2 iw xdotool evtest"
         echo "  Installing critical packages..."
         if ! pacman -S --noconfirm $CRITICAL_PKGS 2>/dev/null; then
             echo "ERROR: Failed to install critical dependencies."
             ERRORS=$((ERRORS + 1))
         fi
 
-        OPTIONAL_PKGS="lm_sensors iio-sensor-proxy easyeffects lsp-plugins"
+        OPTIONAL_PKGS="lm_sensors iio-sensor-proxy easyeffects lsp-plugins guvcview v4l-utils"
         echo "  Installing optional packages..."
         pacman -S --noconfirm $OPTIONAL_PKGS 2>/dev/null || {
             echo "  WARNING: Some optional packages failed to install."
@@ -92,14 +81,13 @@ case "$OS" in
         ;;
     *)
         echo "WARNING: Unsupported OS: $OS. Please install dependencies manually."
-        echo "  Required: python3 python3-usb python3-dbus inotify-tools usbutils iw xdotool"
         ;;
 esac
 
 # Verify critical tools
 echo "  Verifying installation..."
 MISSING=""
-for tool in python3 inotifywait iw xdotool lsusb; do
+for tool in python3 inotifywait iw xdotool lsusb evtest; do
     if ! command -v "$tool" &>/dev/null; then
         MISSING="$MISSING $tool"
     fi
@@ -112,7 +100,7 @@ fi
 # --- Compile and Install Daemon ---------------------------------------------
 
 echo ""
-echo "[2/7] Compiling and installing the daemon..."
+echo "[2/8] Compiling and installing the daemon..."
 cd "$REPO_DIR/daemon"
 make clean 2>/dev/null || true
 if ! make; then
@@ -126,7 +114,7 @@ cd "$REPO_DIR"
 # --- Install CLI Scripts ----------------------------------------------------
 
 echo ""
-echo "[3/7] Installing CLI scripts..."
+echo "[3/8] Installing CLI scripts..."
 
 # Core scripts
 CORE_SCRIPTS="duo bk.py fn-lock.py wayland-display-mgr.py"
@@ -138,7 +126,7 @@ for script in $CORE_SCRIPTS; do
 done
 
 # Service scripts
-SERVICE_SCRIPTS="auto-display.sh light-monitor.sh start.sh toggle-bluetooth.sh kb-light-cycle.sh setup-hotkeys.sh mic-boost.sh setup-displays.sh kb-backlight-mgr.sh"
+SERVICE_SCRIPTS="auto-display.sh light-monitor.sh start.sh toggle-bluetooth.sh kb-light-cycle.sh setup-hotkeys.sh mic-boost.sh setup-displays.sh kb-backlight-unified.sh adaptive-brightness.sh thermal-monitor.sh audio-diagnose.sh audio-calibrate.sh wifi-diagnose.sh test_hardware.sh webcam-diagnose.sh webcam-optimize.sh bt-keyboard-mapper.py zenbook-config.sh suspend-backlight.sh nightlight.sh"
 for script in $SERVICE_SCRIPTS; do
     if [ -f "$REPO_DIR/scripts/$script" ]; then
         cp "$REPO_DIR/scripts/$script" "$BIN_DIR/"
@@ -146,18 +134,12 @@ for script in $SERVICE_SCRIPTS; do
     fi
 done
 
-# Test script
-if [ -f "$REPO_DIR/scripts/test_hardware.sh" ]; then
-    cp "$REPO_DIR/scripts/test_hardware.sh" "$BIN_DIR/"
-    chmod +x "$BIN_DIR/test_hardware.sh"
-fi
-
-echo "  Installed $(ls "$BIN_DIR"/{duo,bk.py,fn-lock.py,wayland-display-mgr.py} 2>/dev/null | wc -l) core scripts"
+echo "  Installed CLI scripts"
 
 # --- Configure Audio --------------------------------------------------------
 
 echo ""
-echo "[4/7] Configuring audio optimizations..."
+echo "[4/8] Configuring audio optimizations..."
 
 # Copy EasyEffects profile
 if [ -n "$INSTALL_USER" ]; then
@@ -176,10 +158,15 @@ options snd-sof-intel-hda-common hda_model=asus-zenbook
 EOF
 echo "  Kernel audio options configured"
 
+# Run audio calibration
+if [ -n "$INSTALL_USER" ]; then
+    sudo -u "$INSTALL_USER" "$BIN_DIR/audio-calibrate.sh" 2>/dev/null || true
+fi
+
 # --- WiFi Configuration -----------------------------------------------------
 
 echo ""
-echo "[5/7] Configuring WiFi..."
+echo "[5/8] Configuring WiFi..."
 
 cat > /etc/modprobe.d/iwlwifi-zenbook.conf << 'EOF'
 # Intel Meteor Lake CNVi WiFi - Zenbook Duo UX8406MA
@@ -188,16 +175,50 @@ options iwlwifi power_save=0 bt_coex_active=1
 EOF
 echo "  WiFi driver options configured"
 
+# --- Configure Hotkeys ------------------------------------------------------
+
+echo ""
+echo "[6/8] Configuring keyboard hotkeys..."
+
+if [ -n "$INSTALL_USER" ]; then
+    sudo -u "$INSTALL_USER" "$BIN_DIR/setup-hotkeys.sh" 2>/dev/null || true
+    echo "  Hotkeys configured for $INSTALL_USER"
+fi
+
+# --- Configure Touch Mapping (Wayland) --------------------------------------
+
+echo ""
+echo "[7/8] Configuring touch mapping..."
+
+# Apply touch mapping for Wayland
+if [ -n "$INSTALL_USER" ]; then
+    sudo -u "$INSTALL_USER" bash -c '
+        dconf write /org/gnome/desktop/peripherals/tablets/04f3:425b/output "['\''SDC'\'', '\''0x419d'\'', '\''0x00000000'\'', '\''eDP-1'\'']" 2>/dev/null
+        dconf write /org/gnome/desktop/peripherals/tablets/04f3:425a/output "['\''SDC'\'', '\''0x419d'\'', '\''0x00000000'\'', '\''eDP-2'\'']" 2>/dev/null
+        dconf write /org/gnome/desktop/peripherals/touchscreens/04f3:425b/output "['\''SDC'\'', '\''0x419d'\'', '\''0x00000000'\'', '\''eDP-1'\'']" 2>/dev/null
+        dconf write /org/gnome/desktop/peripherals/touchscreens/04f3:425a/output "['\''SDC'\'', '\''0x419d'\'', '\''0x00000000'\'', '\''eDP-2'\'']" 2>/dev/null
+    ' 2>/dev/null || true
+    echo "  Touch mapping configured for Wayland"
+fi
+
 # --- Security and Systemd ---------------------------------------------------
 
 echo ""
-echo "[6/7] Setting up security and services..."
+echo "[8/8] Setting up security and services..."
 
-# Restricted sudoers (only specific commands needed by zenbook-duo)
+# Udev rules for keyboard backlight
+cat > /etc/udev/rules.d/99-zenbook-keyboard.rules << 'EOF'
+# ASUS Zenbook Duo Keyboard - USB access without root
+SUBSYSTEM=="usb", ATTR{idVendor}=="0b05", ATTR{idProduct}=="1b2c", MODE="0666", GROUP="plugdev"
+EOF
+udevadm control --reload-rules 2>/dev/null || true
+udevadm trigger 2>/dev/null || true
+echo "  Udev rules configured"
+
+# Restricted sudoers
 if [ -n "$INSTALL_USER" ]; then
     cat > /etc/sudoers.d/zenbook-duo << EOF
 # Zenbook Duo - Limited sudo access for hardware control
-# Created by zenbook-duo installer
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/tee /sys/class/power_supply/BAT0/charge_control_end_threshold
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/tee /sys/class/backlight/*/brightness
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/bin/bk.py *
@@ -206,17 +227,15 @@ $INSTALL_USER ALL=(root) NOPASSWD: /usr/sbin/rfkill block bluetooth
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/sbin/rfkill unblock bluetooth
 EOF
     chmod 0440 /etc/sudoers.d/zenbook-duo
-    echo "  Sudoers configured for $INSTALL_USER (restricted access)"
-else
-    echo "  WARNING: Sudoers not configured (no user detected)"
+    echo "  Sudoers configured for $INSTALL_USER"
 fi
 
 # Install systemd services
 cp "$REPO_DIR/systemd/"*.service /etc/systemd/system/
 systemctl daemon-reload
 
-# Enable services
-SERVICES="zenbook-duo.service brightness-sync.service zenbook-auto-display.service zenbook-light-monitor.service"
+# Enable all services
+SERVICES="zenbook-duo.service brightness-sync.service zenbook-auto-display.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-config.service"
 for svc in $SERVICES; do
     systemctl enable "$svc" 2>/dev/null && echo "  Enabled: $svc" || echo "  WARNING: Failed to enable $svc"
 done
@@ -224,7 +243,7 @@ done
 # Start daemon immediately
 systemctl restart zenbook-duo.service 2>/dev/null || true
 
-# Create GNOME autostart (for user-level tools)
+# Create GNOME autostart
 if [ -n "$INSTALL_USER" ]; then
     AUTOSTART_DIR="$USER_HOME/.config/autostart"
     mkdir -p "$AUTOSTART_DIR"
@@ -242,20 +261,6 @@ EOF
 fi
 
 # --- Finalize ---------------------------------------------------------------
-
-echo ""
-echo "[7/7] Finalizing hardware settings..."
-
-# Set battery limit
-echo 80 | tee /sys/class/power_supply/BAT0/charge_control_end_threshold > /dev/null 2>&1 || true
-echo "  Battery limit: 80%"
-
-# Set audio levels
-amixer -c 0 sset Master 100% 2>/dev/null || true
-amixer -c 0 sset Speaker 100% 2>/dev/null || true
-echo "  Audio levels set"
-
-# --- Summary ----------------------------------------------------------------
 
 echo ""
 echo "=============================================="
