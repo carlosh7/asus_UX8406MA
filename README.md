@@ -89,8 +89,9 @@ wifi-diagnose.sh            # WiFi check
 
 Based on work by:
 - [alesya-h](https://github.com/alesya-h/zenbook-duo-2024-ux8406ma-linux) — Original display scripts
-- [valirc](https://github.com/valirc/zenbook-duo-2024-ux8406daemon) — C daemon
+- [valirc](https://github.com/valirc/zenbook-duo-2024-ux8406ma-daemon) — C daemon
 - [zakstam](https://github.com/zakstam/zenbook-duo-linux) — Rust implementation
+- [fmstrat](https://github.com/fmstrat/zenbook-duo-linux) — Alternative approach
 
 ---
 
