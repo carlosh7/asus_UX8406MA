@@ -1,0 +1,83 @@
+{
+    "output": {
+        "blocklist": [],
+        "plugins_order": [
+            "equalizer#0",
+            "compressor#0",
+            "stereo-enhancer#0",
+            "limiter#0"
+        ],
+        "equalizer#0": {
+            "balance": 0.0,
+            "fft-size": 4,
+            "filters": [
+                {
+                    "type": "RLBC",
+                    "mode": "BPK",
+                    "slope": 0,
+                    "freq": 60.0,
+                    "q": 1.0,
+                    "gain": 4.0
+                },
+                {
+                    "type": "RLBC",
+                    "mode": "BPK",
+                    "slope": 0,
+                    "freq": 150.0,
+                    "q": 1.2,
+                    "gain": 2.0
+                },
+                {
+                    "type": "RLBC",
+                    "mode": "BPK",
+                    "slope": 0,
+                    "freq": 1000.0,
+                    "q": 1.0,
+                    "gain": 1.0
+                },
+                {
+                    "type": "RLBC",
+                    "mode": "BPK",
+                    "slope": 0,
+                    "freq": 3000.0,
+                    "q": 1.2,
+                    "gain": 2.0
+                },
+                {
+                    "type": "RLBC",
+                    "mode": "BPK",
+                    "slope": 0,
+                    "freq": 8000.0,
+                    "q": 1.0,
+                    "gain": 3.0
+                }
+            ]
+        },
+        "compressor#0": {
+            "attack": 10.0,
+            "boost-amount": 6.0,
+            "boost-threshold": -40.0,
+            "ratio": 3.0,
+            "release": 100.0,
+            "sidechain": {
+                "listen": "none",
+                "mode": "stereo",
+                "source": "middle"
+            },
+            "threshold": -20.0
+        },
+        "stereo-enhancer#0": {
+            "emphasis": 10.0,
+            "sc-height": 25.0,
+            "sc-width": 100.0
+        },
+        "limiter#0": {
+            "alternative-mode": false,
+            "attack": 5.0,
+            "boost-limit": 6.0,
+            "ceiling": -0.5,
+            "release": 50.0,
+            "threshold": -1.0
+        }
+    }
+}
