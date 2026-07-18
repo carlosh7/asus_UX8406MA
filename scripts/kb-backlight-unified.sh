@@ -6,8 +6,8 @@
 
 BK_SCRIPT="/usr/local/bin/bk.py"
 ALS_PATH=$(ls /sys/bus/iio/devices/iio:device*/in_illuminance_raw 2>/dev/null | head -n 1)
-STATE_FILE="/tmp/zenbook-kb-backlight.state"
-TIMESTAMP_FILE="/tmp/zenbook-kb-backlight.timestamp"
+STATE_FILE="/var/lib/zenbook-duo/kb-backlight.state"
+TIMESTAMP_FILE="/var/lib/zenbook-duo/kb-backlight.timestamp"
 LOG_FILE="/var/log/zenbook-kb-backlight.log"
 
 # --- Configuration -----------------------------------------------------------

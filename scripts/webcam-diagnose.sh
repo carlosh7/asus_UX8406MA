@@ -243,9 +243,8 @@ echo ""
 
 echo -e "${BLUE}=== Kernel Messages ===${NC}"
 
-UVC_ERRORS=$(dmesg 2>/dev/null | grep -c "uvcvideo.*error\|uvcvideo.*fail" 2>/dev/null || echo "0")
-UVC_ERRORS=$(echo "$UVC_ERRORS" | tr -d '[:space:]')
-if [ -n "$UVC_ERRORS" ] && [ "$UVC_ERRORS" -gt 0 ] 2>/dev/null; then
+UVC_ERRORS=$(dmesg 2>/dev/null | grep -c "uvcvideo.*error\|uvcvideo.*fail" || echo "0")
+if [ "$UVC_ERRORS" -gt 0 ]; then
     check_warn "Found $UVC_ERRORS UVC error messages"
     dmesg 2>/dev/null | grep "uvcvideo.*error\|uvcvideo.*fail" | tail -3 | while read line; do
         echo "         $line"

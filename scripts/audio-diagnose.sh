@@ -130,6 +130,8 @@ if [ -f "$PROFILE_DIR/ZenbookDuo.json" ]; then
     if grep -q "calf" "$PROFILE_DIR/ZenbookDuo.json" 2>/dev/null; then
         check_fail "Profile uses Calf plugins (NOT INSTALLED) - will not work!"
         echo "         Fix: Reinstall with updated ZenbookDuo.json"
+    elif grep -q "bass_enhancer" "$PROFILE_DIR/ZenbookDuo.json" 2>/dev/null; then
+        check_warn "Profile may use unavailable bass enhancer plugin"
     else
         check_ok "Profile uses available plugins"
     fi
@@ -142,15 +144,11 @@ with open('$PROFILE_DIR/ZenbookDuo.json') as f:
 plugins = d.get('output', {})
 for key, val in plugins.items():
     if isinstance(val, dict) and 'input-gain' in val:
-        gain = val['input-gain']
-        if gain > 1.0:
-            print('%s: %.1f dB' % (key, gain))
+        print(key, val['input-gain'])
 " 2>/dev/null)
     
-    if [ -n "$INPUT_GAIN" ]; then
+    if echo "$INPUT_GAIN" | grep -qE "[3-9]\.|[1-9][0-9]"; then
         check_warn "Profile has high input gain (may cause clipping): $INPUT_GAIN"
-    else
-        check_ok "Profile input gains are safe"
     fi
 else
     check_warn "ZenbookDuo profile not found in $PROFILE_DIR"

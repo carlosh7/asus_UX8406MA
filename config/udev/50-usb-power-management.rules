@@ -1,0 +1,8 @@
+# USB Power Management for Zenbook Duo UX8406MA
+# Enable autosuspend for USB devices except Bluetooth
+
+# Bluetooth: disable autosuspend (prevents wake issues)
+ACTION=="add", SUBSYSTEM=="usb", ATTR{product}=="*Bluetooth*", ATTR{power/autosuspend}="-1"
+
+# All other USB devices: enable autosuspend after 2 seconds
+ACTION=="add", SUBSYSTEM=="usb", ATTR{power/autosuspend}="2"

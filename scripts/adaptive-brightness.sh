@@ -5,7 +5,7 @@
 # Supports: manual pause, auto-resume on light change
 # ============================================================================
 
-ALS_PATH="/sys/bus/iio/devices/iio:device1/in_illuminance_raw"
+ALS_PATH=$(ls /sys/bus/iio/devices/iio:device*/in_illuminance_raw 2>/dev/null | head -n 1)
 BRIGHTNESS_PATH="/sys/class/backlight/intel_backlight/brightness"
 MAX_BRIGHTNESS="/sys/class/backlight/intel_backlight/max_brightness"
 STATE_FILE="/tmp/zenbook-adaptive-brightness.state"

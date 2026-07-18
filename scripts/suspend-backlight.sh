@@ -35,14 +35,14 @@ case "$1" in
         if keyboard_attached; then
             level=$(get_light_level)
             python3 "$BK_SCRIPT" "$level" 2>/dev/null
-            echo "$level" > /tmp/zenbook-kb-backlight.state
+            echo "$level" > /var/lib/zenbook-duo/kb-backlight.state
             echo "[$(date '+%H:%M:%S')] Resume: backlight set to $level" >> /var/log/zenbook-kb-backlight.log
         fi
         ;;
     pre)
         # Before suspend - turn off keyboard backlight
         python3 "$BK_SCRIPT" 0 2>/dev/null
-        echo "0" > /tmp/zenbook-kb-backlight.state
+        echo "0" > /var/lib/zenbook-duo/kb-backlight.state
         echo "[$(date '+%H:%M:%S')] Suspend: backlight off" >> /var/log/zenbook-kb-backlight.log
         ;;
 esac

@@ -26,7 +26,7 @@ save_config() {
     THERMAL_PROFILE=$(cat /sys/devices/platform/asus-nb-wmi/platform-profile/platform-profile-0/profile 2>/dev/null || echo "balanced")
     
     # Get current keyboard backlight level
-    KB_LEVEL=$(cat /tmp/zenbook-kb-backlight.state 2>/dev/null || echo "2")
+    KB_LEVEL=$(cat /var/lib/zenbook-duo/kb-backlight.state 2>/dev/null || echo "2")
     
     # Get current battery limit
     BATTERY_LIMIT=$(cat /sys/class/power_supply/BAT0/charge_control_end_threshold 2>/dev/null || echo "80")
@@ -87,7 +87,7 @@ restore_config() {
     if [ -n "$keyboard_level" ]; then
         echo "Restoring keyboard backlight: $keyboard_level"
         python3 /usr/local/bin/bk.py "$keyboard_level" 2>/dev/null
-        echo "$keyboard_level" > /tmp/zenbook-kb-backlight.state
+        echo "$keyboard_level" > /var/lib/zenbook-duo/kb-backlight.state
     fi
     
     # Restore battery limit
