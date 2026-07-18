@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================================
 # Zenbook Duo - OLED Burn-in Protection
-# v2: Fixed sleep settings, added suspend support
+# v3: Fixed sleep settings, disabled notification beeps
 # ============================================================================
 
 LOG_FILE="/var/log/oled-protect.log"
@@ -40,6 +40,11 @@ gsettings set org.gnome.settings-daemon.plugins.color night-light-enabled true 2
 gsettings set org.gnome.settings-daemon.plugins.color night-light-temperature uint32 3500 2>/dev/null
 log_msg "Night Light enabled (3500K)"
 
+# 6. Disable notification sounds (prevent beeps from Bluetooth reconnections)
+gsettings set org.gnome.desktop.sound event-sounds false 2>/dev/null
+gsettings set org.gnome.desktop.sound input-feedback-sounds false 2>/dev/null
+log_msg "Notification sounds disabled (prevent beeps)"
+
 echo "OLED protection configured."
 echo "  - Idle timeout: 5 minutes"
 echo "  - Screen lock: enabled"
@@ -48,3 +53,4 @@ echo "  - Sleep type: suspend"
 echo "  - Lid close: suspend (even with external monitor)"
 echo "  - Dark theme: enabled"
 echo "  - Night Light: enabled (3500K)"
+echo "  - Notification sounds: DISABLED"
