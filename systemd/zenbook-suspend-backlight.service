@@ -1,0 +1,10 @@
+[Unit]
+Description=Zenbook Duo - Keyboard Backlight on Resume
+After=suspend.target hibernate.target hybrid-sleep.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/suspend-backlight.sh post
+
+[Install]
+WantedBy=suspend.target hibernate.target hybrid-sleep.target

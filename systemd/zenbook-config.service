@@ -1,0 +1,11 @@
+[Unit]
+Description=Zenbook Duo - Restore Configuration
+After=graphical.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/zenbook-config.sh restore
+RemainAfterExit=yes
+
+[Install]
+WantedBy=graphical.target

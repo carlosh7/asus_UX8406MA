@@ -2,56 +2,166 @@
 
 La herramienta principal de este proyecto es el comando `duo`. A continuación, se detallan sus funciones.
 
-## 🖥 Gestión de Pantallas
+## Gestión de Pantallas
 
 Controla el estado de las dos pantallas OLED de tu Zenbook:
 
 - `duo top`: Mantiene encendida solo la pantalla principal (superior).
 - `duo bottom`: Enciende solo la pantalla inferior.
 - `duo both`: Enciende ambas pantallas (modo extendido).
-- `duo save-ext`: Guarda la posición y el **escalado** actual de tus monitores externos para que el sistema los recuerde siempre.
 - `duo toggle`: Cambia rápidamente entre el modo de una pantalla y el de dos.
-- `duo watch-displays`: Inicia el monitoreo automático. Si acoplas el teclado, se apaga la pantalla inferior; si lo retiras, se enciende.
+- `duo status`: Muestra el estado actual de las pantallas.
+- `duo status-full`: Muestra información detallada de monitores (incluyendo externos).
+- `duo watch-displays`: Inicia el monitoreo automático del teclado USB.
 
-## 🖥️ Escalado y Monitores Externos
+## Monitores Externos
 
-Si usas monitores externos, se recomienda encarecidamente usar una sesión de **Wayland** (por defecto en Ubuntu 24.04). En Wayland puedes ajustar la escala de cada monitor individualmente desde la configuración de GNOME.
+Gestiona la posición de monitores externos en Wayland:
 
-Si decides permanecer en **X11**, GNOME no te permitirá escalas diferentes. En ese caso, usa:
-```bash
-# Ajustar escala manualmente en X11
-xrandr --output HDMI-1 --scale 1.25x1.25
-# Guardar para que el daemon lo respete
-duo save-ext
-```
+- `duo ext-position save`: Guarda las posiciones actuales de monitores externos.
+- `duo ext-position restore`: Restaura posiciones guardadas al conectar un monitor.
+- `duo ext-position list`: Muestra las posiciones actuales de todos los monitores.
+- `duo save-ext`: Alias para `ext-position save`.
 
-## 🔋 Batería y Energía
+## Brillo y Retroiluminación
 
-- `duo bat-limit [n]`: Establece un límite de carga para proteger la batería. Ej: `duo bat-limit 80`.
-
-## ⌨️ Teclado y Retroiluminación
-
-- `duo set-kb-backlight [0-3]`: Ajusta el brillo del teclado (0 es apagado, 3 es máximo).
-- `duo sync-backlight`: Sincroniza manualmente el brillo de la pantalla inferior con la superior.
+- `duo sync-backlight`: Sincroniza el brillo de la pantalla inferior con la superior.
 - `duo watch-backlight`: Activa el modo de sincronización automática en tiempo real.
+- `duo set-kb-backlight <0-3>`: Ajusta el brillo del teclado (0=apagado, 3=máximo).
 
-## 🌡 Sensores y Monitoreo (Próximamente)
+## Batería y Energía
 
-Estamos trabajando en integrar el monitoreo de ventiladores y temperaturas directamente en `duo`. Por ahora puedes usar:
-- `sensors`: Para ver las temperaturas.
-- `cat /sys/class/hwmon/hwmon7/fan1_input`: Para ver las RPM del ventilador.
+- `duo bat-limit [n]`: Establece un límite de carga para proteger la batería (por defecto: 80%).
 
-## ⚙️ Daemon de Detección
+## Sistema
 
-El sistema instala un servicio que corre en segundo plano llamado `zenbook-duo`.
-- **Estado**: `zenbook-duo status`
-- **Manual**: `zenbook-duo daemon` (para ver logs en tiempo real).
+- `duo model`: Muestra el modelo detectado (3k/1080p).
+- `duo session-type`: Muestra si estás en X11 o Wayland.
+- `duo help`: Muestra la ayuda completa.
 
 ---
 
-## ⌨️ Atajos de Teclado Recomendados
+## Herramientas de Diagnóstico
+
+### Audio
+```bash
+audio-diagnose.sh    # Diagnóstico completo de audio
+audio-calibrate.sh   # Calibración de audio y amplificadores
+```
+
+### WiFi
+```bash
+wifi-diagnose.sh     # Diagnóstico completo de WiFi
+```
+
+### Refrigeración
+```bash
+thermal-monitor.sh   # Monitoreo térmico (se ejecuta como servicio)
+```
+
+### Hardware Completo
+```bash
+test_hardware.sh     # Test completo del sistema
+```
+
+### Cámara
+```bash
+webcam-diagnose.sh   # Diagnóstico de cámara
+webcam-optimize.sh   # Optimización de cámara
+```
+
+### Brillo Adaptativo
+```bash
+adaptive-brightness.sh  # Control de brillo automático (se ejecuta como servicio)
+```
+
+---
+
+## Servicios Systemd
+
+El sistema instala varios servicios que corren en segundo plano:
+
+| Servicio | Función |
+|----------|---------|
+| `zenbook-duo` | Daemon principal: monitorea teclado USB |
+| `brightness-sync` | Sincroniza brillo entre pantallas |
+| `zenbook-auto-display` | Auto-detección de teclado |
+| `zenbook-light-monitor` | Ajusta retroiluminación según luz ambiental |
+| `zenbook-thermal` | Monitorea temperatura y ajusta perfil de ventilador |
+| `zenbook-adaptive-brightness` | Brillo adaptativo de pantalla |
+| `zenbook-config` | Restaurar configuración al inicio |
+| `zenbook-suspend-backlight` | Luz del teclado al despertar |
+
+**Comandos útiles:**
+```bash
+systemctl status zenbook-duo           # Ver estado del daemon
+journalctl -u zenbook-duo -f           # Ver logs en tiempo real
+sudo systemctl restart zenbook-duo     # Reiniciar daemon
+```
+
+---
+
+## Atajos de Teclado
 
 Si has ejecutado el script de hotkeys, tendrás estos atajos disponibles:
-- `Super + F7`: Cambiar modo de pantalla (Duo toggle).
-- `Super + F4`: Ciclar brillo del teclado.
-- `Super + F1/F2/F3`: Control de audio global.
+- `F1`: Volume Mute
+- `F2`: Volume Down
+- `F3`: Volume Up
+- `F4`: Keyboard Backlight
+- `F5`: Brightness Down
+- `F6`: Brightness Up
+- `F7`: Toggle Display
+- `F9`: Mic Mute
+- `F10`: Toggle Bluetooth
+
+**Fn + F1-F12**: Teclas de función (F1-F12)
+
+---
+
+## Calibración Automática
+
+El sistema incluye calibraciones predefinidas:
+
+- **Brillo adaptativo**: Calibrado para 4 condiciones de luz (ventana, escritorio, artificial, oscuro)
+- **Luz del teclado**: Se enciende solo en condiciones oscuras (<2500 raw)
+- **Refrigeración**: Perfiles automático (quiet/balanced/performance)
+
+---
+
+## Solución de Problemas Comunes
+
+### El teclado no se detecta automáticamente
+```bash
+zenbook-duo status    # Verificar estado del teclado
+systemctl status zenbook-duo  # Verificar que el daemon esté corriendo
+```
+
+### El brillo no se sincroniza
+```bash
+duo sync-backlight    # Sincronizar manualmente
+inotifywait --help    # Verificar que inotify-tools está instalado
+```
+
+### El sonido suena mal
+```bash
+audio-diagnose.sh     # Diagnosticar problemas de audio
+audio-calibrate.sh    # Calibrar audio y amplificadores
+wpctl status          # Verificar niveles de volumen
+```
+
+### La laptop se calienta
+```bash
+zenbook-duo thermal   # Ver temperatura actual
+journalctl -u zenbook-thermal -f  # Ver logs del monitoreo térmico
+```
+
+### WiFi inestable
+```bash
+wifi-diagnose.sh      # Diagnosticar problemas de WiFi
+```
+
+### Touch no funciona
+```bash
+# En Wayland: touch funciona automáticamente
+# En X11: ejecutar setup-hotkeys.sh para configurar
+```

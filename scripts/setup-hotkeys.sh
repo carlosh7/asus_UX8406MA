@@ -1,9 +1,10 @@
 #!/bin/bash
-# Setup GNOME hotkeys for Alt + F1-F12
+# Setup GNOME hotkeys for F1-F12 (multimedia keys)
+# Works in both USB and Bluetooth modes
 
 echo "Configuring GNOME media keys..."
 
-# Clear old Alt mappings first
+# Clear old Super mappings first
 gsettings set org.gnome.settings-daemon.plugins.media-keys volume-mute "['']"
 gsettings set org.gnome.settings-daemon.plugins.media-keys volume-down "['']"
 gsettings set org.gnome.settings-daemon.plugins.media-keys volume-up "['']"
@@ -12,14 +13,13 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys screen-brightness-up 
 gsettings set org.gnome.settings-daemon.plugins.media-keys mic-mute "['']"
 gsettings set org.gnome.settings-daemon.plugins.media-keys help "['']"
 
-
-# Set new Super mappings
-gsettings set org.gnome.settings-daemon.plugins.media-keys volume-mute "['<Super>F1']"
-gsettings set org.gnome.settings-daemon.plugins.media-keys volume-down "['<Super>F2']"
-gsettings set org.gnome.settings-daemon.plugins.media-keys volume-up "['<Super>F3']"
-gsettings set org.gnome.settings-daemon.plugins.media-keys screen-brightness-down "['<Super>F5']"
-gsettings set org.gnome.settings-daemon.plugins.media-keys screen-brightness-up "['<Super>F6']"
-gsettings set org.gnome.settings-daemon.plugins.media-keys mic-mute "['<Super>F9']"
+# Set new F* mappings (no Super needed)
+gsettings set org.gnome.settings-daemon.plugins.media-keys volume-mute "['F1']"
+gsettings set org.gnome.settings-daemon.plugins.media-keys volume-down "['F2']"
+gsettings set org.gnome.settings-daemon.plugins.media-keys volume-up "['F3']"
+gsettings set org.gnome.settings-daemon.plugins.media-keys screen-brightness-down "['F5']"
+gsettings set org.gnome.settings-daemon.plugins.media-keys screen-brightness-up "['F6']"
+gsettings set org.gnome.settings-daemon.plugins.media-keys mic-mute "['F9']"
 
 # Custom keybindings
 echo "Configuring custom keybindings..."
@@ -40,17 +40,23 @@ set_custom_binding() {
     gsettings set "$BIND_PATH:$path" binding "$binding"
 }
 
-# List of custom bindings
-set_custom_binding "custom0" "Teclado-Luz" "/usr/local/bin/kb-light-cycle.sh" "<Super>F4"
-set_custom_binding "custom1" "Duo-Toggle" "/usr/local/bin/duo toggle" "<Super>F7"
-set_custom_binding "custom2" "Bluetooth-Toggle" "/usr/local/bin/toggle-bluetooth.sh" "<Super>F10"
-
+# List of custom bindings (F* without Super)
+set_custom_binding "custom0" "Teclado-Luz" "/usr/local/bin/kb-light-cycle.sh" "F4"
+set_custom_binding "custom1" "Duo-Toggle" "/usr/local/bin/duo toggle" "F7"
+set_custom_binding "custom2" "Bluetooth-Toggle" "/usr/local/bin/toggle-bluetooth.sh" "F10"
 
 # Register the custom bindings
 gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$BASE_PATH/custom0/', '$BASE_PATH/custom1/', '$BASE_PATH/custom2/']"
 
-# Set Fn-Lock to 1 (F1-F12 primary) via USB if keyboard attached
-echo "Setting keyboard hardware to Function Mode (F1-F12 primary)..."
-sudo /usr/local/bin/fn-lock.py 1 2>/dev/null || echo "Note: Could not set Fn-Lock (is keyboard attached via USB?)"
-
-echo "Done! Test your Super + F1-F12 keys now."
+echo "Done! Test your F1-F12 keys now."
+echo ""
+echo "Multimedia keys:"
+echo "  F1: Volume Mute"
+echo "  F2: Volume Down"
+echo "  F3: Volume Up"
+echo "  F4: Keyboard Backlight"
+echo "  F5: Brightness Down"
+echo "  F6: Brightness Up"
+echo "  F7: Toggle Display"
+echo "  F9: Mic Mute"
+echo "  F10: Toggle Bluetooth"

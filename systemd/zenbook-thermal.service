@@ -1,12 +1,12 @@
 [Unit]
-Description=Zenbook Duo Auto Display (keyboard attach/detach)
+Description=Zenbook Duo Thermal Monitor (auto fan profile)
 After=graphical.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/auto-display.sh
+ExecStart=/usr/local/bin/thermal-monitor.sh
 Restart=always
-RestartSec=5
+RestartSec=10
 StandardOutput=journal
 StandardError=journal
 

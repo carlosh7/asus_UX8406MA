@@ -1,12 +1,14 @@
 [Unit]
-Description=Zenbook Duo Light Monitor
+Description=Zenbook Duo Keyboard Backlight (ambient light + inactivity)
 After=graphical.target
 
 [Service]
-Type=forking
-ExecStart=/home/carlosh/asus_UX8406MA/zenbook-duo-linux/scripts/light-monitor.sh
+Type=simple
+ExecStart=/usr/local/bin/kb-backlight-unified.sh
 Restart=always
 RestartSec=5
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=graphical.target

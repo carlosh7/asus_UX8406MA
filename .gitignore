@@ -5,3 +5,9 @@ daemon/zenbook-duo
 __pycache__/
 *.pyc
 .DS_Store
+/tmp/
+*.swp
+*.swo
+*~
+.vscode/
+.idea/

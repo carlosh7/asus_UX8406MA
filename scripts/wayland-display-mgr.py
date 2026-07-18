@@ -20,46 +20,73 @@ def set_config(mode):
         connector_to_mode[connector] = current_mode
 
     new_lms = []
-    edp1_lm = next((lm for lm in logical_monitors if any(m[0] == 'eDP-1' for m in lm[5])), None)
-    if not edp1_lm: sys.exit(1)
     
-    x1, y1, scale1, trans1, prim1, mons1, props1 = edp1_lm
-    edp1_info = next(m for m in monitors if m[0][0] == 'eDP-1')
-    edp1_mode = next(m for m in edp1_info[1] if m[0] == connector_to_mode['eDP-1'])
-    h1_log = int(round(edp1_mode[2] / scale1))
-    w1_log = int(round(edp1_mode[1] / scale1))
+    # Get eDP-1 info for dimensions
+    edp1_lm = next((lm for lm in logical_monitors if any(m[0] == 'eDP-1' for m in lm[5])), None)
+    edp2_lm = next((lm for lm in logical_monitors if any(m[0] == 'eDP-2' for m in lm[5])), None)
+    
+    # Get eDP-1 dimensions and scale from current config
+    w1_log = 1648  # default logical width
+    h1_log = 1030  # default logical height
+    scale1 = dbus.Double(1.7475727796554565)  # default scale (2880/1648)
+    
+    if edp1_lm:
+        x1, y1, s1, trans1, prim1, mons1, props1 = edp1_lm
+        scale1 = s1  # Use the exact scale from current config
+        edp1_info = next((m for m in monitors if m[0][0] == 'eDP-1'), None)
+        if edp1_info:
+            edp1_mode = next((m for m in edp1_info[1] if m[0] == connector_to_mode['eDP-1']), None)
+            if edp1_mode:
+                h1_log = int(round(edp1_mode[2] / float(scale1)))
+                w1_log = int(round(edp1_mode[1] / float(scale1)))
 
-    # Construct logical monitors list
-    # eDP-1
-    new_lms.append(dbus.Struct((0, 0, scale1, trans1, True, 
-        [dbus.Struct(('eDP-1', connector_to_mode['eDP-1'], {}), signature='ssa{sv}')]), signature='iiduba(ssa{sv})'))
+    if mode == 'top':
+        # Only eDP-1 (primary)
+        new_lms.append(dbus.Struct((0, 0, scale1, 0, True,
+            [dbus.Struct(('eDP-1', connector_to_mode.get('eDP-1', '2880x1800@120.000'), {}), signature='ssa{sv}')]),
+            signature='iiduba(ssa{sv})'))
 
-    if mode == 'both':
+    elif mode == 'bottom':
+        # Only eDP-2 (primary)
+        edp2_scale = scale1
+        if edp2_lm:
+            edp2_scale = edp2_lm[2]
+        new_lms.append(dbus.Struct((0, 0, edp2_scale, 0, True,
+            [dbus.Struct(('eDP-2', connector_to_mode.get('eDP-2', '2880x1800@120.000'), {}), signature='ssa{sv}')]),
+            signature='iiduba(ssa{sv})'))
+
+    elif mode == 'both':
+        # eDP-1 (primary) + eDP-2 (below)
+        new_lms.append(dbus.Struct((0, 0, scale1, 0, True,
+            [dbus.Struct(('eDP-1', connector_to_mode.get('eDP-1', '2880x1800@120.000'), {}), signature='ssa{sv}')]),
+            signature='iiduba(ssa{sv})'))
         edp2_mode_id = connector_to_mode.get('eDP-2', '2880x1800@120.000')
-        new_lms.append(dbus.Struct((0, h1_log, scale1, 0, False, 
-            [dbus.Struct(('eDP-2', edp2_mode_id, {}), signature='ssa{sv}')]), signature='iiduba(ssa{sv})'))
+        new_lms.append(dbus.Struct((0, h1_log, scale1, 0, False,
+            [dbus.Struct(('eDP-2', edp2_mode_id, {}), signature='ssa{sv}')]),
+            signature='iiduba(ssa{sv})'))
 
-    # External screens
-    x_ptr = w1_log
+    # External screens (preserve their current positions from logical_monitors)
     for lm in logical_monitors:
         if any(m[0] in ['eDP-1', 'eDP-2'] for m in lm[5]): continue
         new_mons = [dbus.Struct((m[0], connector_to_mode[m[0]], {}), signature='ssa{sv}') for m in lm[5]]
-        new_lms.append(dbus.Struct((x_ptr, 0, lm[2], lm[3], False, new_mons), signature='iiduba(ssa{sv})'))
-        m_info = next(m for m in monitors if m[0][0] == lm[5][0][0])
-        m_mode = next(m for m in m_info[1] if m[0] == connector_to_mode[lm[5][0][0]])
-        x_ptr += int(round(m_mode[1] / lm[2]))
+        # Use the existing position from logical_monitors
+        new_lms.append(dbus.Struct((lm[0], lm[1], lm[2], lm[3], False, new_mons),
+            signature='iiduba(ssa{sv})'))
 
     try:
         # Sort to ensure adjacency check passes
         new_lms.sort(key=lambda lm: (lm[0], lm[1]))
         
-        # Method 2 (Persistent) should be the most reliable
-        iface.ApplyMonitorsConfig(dbus.UInt32(serial), dbus.UInt32(2), new_lms, {})
-        print(f"Success: {mode}")
+        # Method 1 (Temporary) - works for display switching WITHOUT confirmation dialog
+        # Method 2 (Persistent) triggers GNOME display configuration dialog
+        iface.ApplyMonitorsConfig(dbus.UInt32(serial), dbus.UInt32(1), new_lms, {})
+        print("Success: %s" % mode)
     except Exception as e:
-        print(f"Error: {e}")
+        print("Error: %s" % str(e))
         sys.exit(1)
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2: sys.exit(1)
+    if len(sys.argv) < 2:
+        print("Usage: %s <top|bottom|both>" % sys.argv[0])
+        sys.exit(1)
     set_config(sys.argv[1])

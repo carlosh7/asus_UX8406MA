@@ -2,14 +2,18 @@
 
 cd "$(dirname "$(realpath "$0")")"
 
-# Detect session type (X11 or Wayland)
-# Detect session type (X11 or Wayland)
+# ============================================================================
+# Zenbook Duo Linux - Control Script
+# Supports both X11 and Wayland (GNOME Mutter DBus)
+# ============================================================================
+
+# --- Session Detection -------------------------------------------------------
+
 function is_x11 {
-    # If already set, use it
     if [ "$XDG_SESSION_TYPE" = "x11" ]; then return 0; fi
     if [ "$XDG_SESSION_TYPE" = "wayland" ]; then return 1; fi
-    
-    # Try to detect from loginctl if running as root
+
+    # Fallback: detect from loginctl if running as root
     if [ "$EUID" -eq 0 ]; then
         local session_id=$(loginctl list-sessions | grep " seat0 " | awk '{print $1}' | head -1)
         if [ -n "$session_id" ]; then
@@ -30,17 +34,52 @@ if is_x11 && [ -z "$DISPLAY" ]; then
     export XAUTHORITY=$(find /run/user/ -name Xauthority 2>/dev/null | head -1)
 fi
 
-function get_resolution {
-    xrandr 2>/dev/null | grep -A1 "eDP-1" | grep -oP '\d+x\d+' | head -1
-}
+# --- Model Detection ---------------------------------------------------------
 
 function detect-model {
-    local res=$(get_resolution)
-    if [[ "$res" == "2880x1800" ]]; then
+    # Use DMI product name for reliable detection (works on both X11 and Wayland)
+    local product=$(cat /sys/class/dmi/id/product_name 2>/dev/null)
+    if echo "$product" | grep -qi "UX8406"; then
         echo "3k"
     else
-        echo "1080p"
+        # Fallback: try xrandr (works on X11, may show scaled res on Wayland)
+        local res=$(xrandr 2>/dev/null | grep -A1 "eDP-1" | grep -oP '\d+x\d+' | head -1)
+        if [[ "$res" == "2880x1800" ]]; then
+            echo "3k"
+        else
+            echo "1080p"
+        fi
     fi
+}
+
+# --- Display Configuration ---------------------------------------------------
+
+MODEL=$(detect-model)
+
+if [ "$MODEL" = "3k" ]; then
+    preferred_resolution="2880x1800@120.00"
+    backlight="card1-eDP-2-backlight"
+    ui_scale=1.75
+    y_offset=1030
+    top_display="eDP-1"
+    bottom_display="eDP-2"
+else
+    preferred_resolution="1920x1200@60.03"
+    backlight="card1-eDP-2-backlight"
+    ui_scale=1
+    y_offset=1200
+    top_display="eDP-1"
+    bottom_display="eDP-2"
+fi
+
+function suenv {
+    sudo /usr/bin/env "$@"
+}
+
+# --- USB Detection -----------------------------------------------------------
+
+function keyboard-is-attached {
+    lsusb 2>/dev/null | grep -q "0b05:1b2c"
 }
 
 function has_external_monitor {
@@ -48,61 +87,190 @@ function has_external_monitor {
     return $?
 }
 
-MODEL=$(detect-model)
-
-if [ "$MODEL" = "3k" ]; then
-  if has_external_monitor; then
-    preferred_resolution="2880x1800@60.00"
-    echo "Monitor externo detectado: limitando paneles internos a 60Hz para estabilidad."
-  else
-    preferred_resolution="2880x1800@120.00"
-  fi
-  backlight="card1-eDP-2-backlight"
-  ui_scale=1.75
-  y_offset=1030
-  top_display="eDP-1"
-  bottom_display="eDP-2"
-else
-  preferred_resolution="1920x1200@60.03"
-  backlight="card1-eDP-2-backlight"
-  ui_scale=1
-  y_offset=1200
-  top_display="eDP-1"
-  bottom_display="eDP-2"
-fi
-
-function suenv {
-    sudo /usr/bin/env "$@"
-}
-
 function get_external_monitors {
     xrandr 2>/dev/null | grep " connected" | grep -v "eDP-1" | grep -v "eDP-2" | awk '{print $1}'
 }
 
+# --- Wayland DBus Helpers ----------------------------------------------------
+
 CONFIG_FILE="/etc/zenbook-duo/external_layout.conf"
+EXT_CONFIG_FILE="/etc/zenbook-duo/external_positions.json"
+
+# Get current user's DBus session address
+function get_dbus_session {
+    local user_id=$(id -u)
+    
+    # If running as root, find the logged-in graphical user
+    if [ "$EUID" -eq 0 ]; then
+        local target_user="${SUDO_USER:-}"
+        if [ -z "$target_user" ]; then
+            # Find user with active graphical session
+            target_user=$(who | grep "(:0\|seat0)" | awk '{print $1}' | head -1)
+            if [ -z "$target_user" ]; then
+                # Fallback: find any user with a graphical session
+                target_user=$(loginctl list-sessions --no-legend 2>/dev/null | while read sid rest; do
+                    local type=$(loginctl show-session "$sid" -p Type --value 2>/dev/null)
+                    local user=$(loginctl show-session "$sid" -p Name --value 2>/dev/null)
+                    if [ "$type" = "wayland" ] || [ "$type" = "x11" ]; then
+                        echo "$user"
+                        break
+                    fi
+                done)
+            fi
+        fi
+        if [ -n "$target_user" ]; then
+            user_id=$(id -u "$target_user")
+        fi
+    fi
+    echo "unix:path=/run/user/$user_id/bus"
+}
+
+# Call wayland-display-mgr.py as current user
+function wayland-display-cmd {
+    local mode="$1"
+    local user_id=$(id -u)
+    local dbus_addr=$(get_dbus_session)
+    local output
+    local target_user=""
+
+    # If running as root, find the graphical user
+    if [ "$EUID" -eq 0 ]; then
+        target_user="${SUDO_USER:-}"
+        if [ -z "$target_user" ]; then
+            target_user=$(who | grep "(:0\|seat0)" | awk '{print $1}' | head -1)
+            if [ -z "$target_user" ]; then
+                target_user=$(loginctl list-sessions --no-legend 2>/dev/null | while read sid rest; do
+                    local type=$(loginctl show-session "$sid" -p Type --value 2>/dev/null)
+                    local user=$(loginctl show-session "$sid" -p Name --value 2>/dev/null)
+                    if [ "$type" = "wayland" ] || [ "$type" = "x11" ]; then
+                        echo "$user"
+                        break
+                    fi
+                done)
+            fi
+        fi
+    fi
+
+    if [ -n "$target_user" ]; then
+        user_id=$(id -u "$target_user")
+        dbus_addr="unix:path=/run/user/$user_id/bus"
+        output=$(sudo -u "$target_user" DBUS_SESSION_BUS_ADDRESS="$dbus_addr" \
+            /usr/local/bin/wayland-display-mgr.py "$mode" 2>&1)
+    else
+        output=$(DBUS_SESSION_BUS_ADDRESS="$dbus_addr" \
+            /usr/local/bin/wayland-display-mgr.py "$mode" 2>&1)
+    fi
+    echo "$output"
+    echo "$output" | grep -q "Success" && return 0 || return 1
+}
+
+# Get display state via DBus (Wayland native)
+function get-monitor-status-wayland {
+    local user_id=$(id -u)
+    if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
+        user_id=$(id -u "$SUDO_USER")
+    fi
+    local dbus_addr="unix:path=/run/user/$user_id/bus"
+
+    # Query GNOME Mutter DisplayConfig
+    local result
+    if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
+        result=$(sudo -u "$SUDO_USER" DBUS_SESSION_BUS_ADDRESS="$dbus_addr" \
+            python3 -c "
+import dbus
+bus = dbus.SessionBus()
+obj = bus.get_object('org.gnome.Mutter.DisplayConfig', '/org/gnome/Mutter/DisplayConfig')
+iface = dbus.Interface(obj, 'org.gnome.Mutter.DisplayConfig')
+serial, monitors, logical_monitors, properties = iface.GetCurrentState()
+active = []
+for lm in logical_monitors:
+    for m in lm[5]:
+        active.append(m[0])
+if 'eDP-1' in active and 'eDP-2' in active:
+    print('both')
+elif 'eDP-1' in active:
+    print('top')
+elif 'eDP-2' in active:
+    print('bottom')
+else:
+    print('none')
+" 2>/dev/null)
+    else
+        result=$(DBUS_SESSION_BUS_ADDRESS="$dbus_addr" \
+            python3 -c "
+import dbus
+bus = dbus.SessionBus()
+obj = bus.get_object('org.gnome.Mutter.DisplayConfig', '/org/gnome/Mutter/DisplayConfig')
+iface = dbus.Interface(obj, 'org.gnome.Mutter.DisplayConfig')
+serial, monitors, logical_monitors, properties = iface.GetCurrentState()
+active = []
+for lm in logical_monitors:
+    for m in lm[5]:
+        active.append(m[0])
+if 'eDP-1' in active and 'eDP-2' in active:
+    print('both')
+elif 'eDP-1' in active:
+    print('top')
+elif 'eDP-2' in active:
+    print('bottom')
+else:
+    print('none')
+" 2>/dev/null)
+    fi
+    echo "$result"
+}
+
+# --- Display Status (session-aware) ------------------------------------------
+
+function get-monitor-status {
+    if is_x11; then
+        # X11: use xrandr
+        local top_status=$(xrandr 2>/dev/null | grep "$top_display" | grep "connected [0-9]")
+        local bottom_status=$(xrandr 2>/dev/null | grep "$bottom_display" | grep "connected [0-9]")
+
+        if [ -n "$top_status" ] && [ -n "$bottom_status" ]; then
+            echo "both"
+        elif [ -n "$top_status" ]; then
+            echo "top"
+        elif [ -n "$bottom_status" ]; then
+            echo "bottom"
+        else
+            echo "none"
+        fi
+    else
+        # Wayland: use DBus
+        get-monitor-status-wayland
+    fi
+}
+
+# --- Display Control (X11) ---------------------------------------------------
 
 function get_external_args {
     local ext_monitors=$(xrandr 2>/dev/null | grep " connected" | grep -v "eDP-1" | grep -v "eDP-2" | awk '{print $1}')
     local args=""
-    
+
     for mon in $ext_monitors; do
-        # Try to find saved position and scale in config file (format: NAME POS SCALE)
-        local line=$(grep "^$mon " "$CONFIG_FILE" 2>/dev/null)
-        local saved_pos=$(echo "$line" | awk '{print $2}')
-        local saved_scale=$(echo "$line" | awk '{print $3}')
-        
         local mon_args="--output $mon --auto"
-        
-        if [ -n "$saved_pos" ]; then
-            mon_args="$mon_args --pos $saved_pos"
+
+        # Try to find saved position from old config format
+        if [ -f "$CONFIG_FILE" ]; then
+            local line=$(grep "^$mon " "$CONFIG_FILE" 2>/dev/null)
+            local saved_pos=$(echo "$line" | awk '{print $2}')
+            local saved_scale=$(echo "$line" | awk '{print $3}')
+
+            if [ -n "$saved_pos" ]; then
+                mon_args="$mon_args --pos $saved_pos"
+            else
+                mon_args="$mon_args --right-of $top_display"
+            fi
+
+            if [ -n "$saved_scale" ]; then
+                mon_args="$mon_args --scale $saved_scale"
+            fi
         else
             mon_args="$mon_args --right-of $top_display"
         fi
-        
-        if [ -n "$saved_scale" ]; then
-            mon_args="$mon_args --scale $saved_scale"
-        fi
-        
+
         args="$args $mon_args"
     done
     echo "$args"
@@ -111,12 +279,12 @@ function get_external_args {
 function set-display-x11 {
     local mode="$1"
     local ext_args=$(get_external_args)
-    
+
     # Parse preferred resolution and rate
     local res="${preferred_resolution%@*}"
     local rate="${preferred_resolution#*@}"
     local mode_args="--mode $res --rate $rate"
-    
+
     case "$mode" in
         top)
             xrandr --output "$top_display" $mode_args --primary $ext_args
@@ -135,189 +303,449 @@ function set-display-x11 {
     esac
 }
 
+# --- Display Control (Wayland via DBus) --------------------------------------
+
+function set-display-wayland {
+    local mode="$1"
+
+    # Use wayland-display-mgr.py for all modes (top, bottom, both)
+    local output
+    output=$(wayland-display-cmd "$mode")
+    echo "$output"
+
+    # Handle backlight for instant feedback
+    if [ "$mode" = "top" ]; then
+        echo 0 | sudo tee /sys/class/backlight/"$backlight"/brightness >/dev/null 2>&1 || true
+    elif [ "$mode" = "both" ] || [ "$mode" = "bottom" ]; then
+        # Restore brightness when turning back on
+        cat /sys/class/backlight/intel_backlight/brightness | sudo tee /sys/class/backlight/"$backlight"/brightness >/dev/null 2>&1 || true
+    fi
+    echo "$output" | grep -q "Success" && return 0 || return 1
+}
+
+# --- Display Control (unified) -----------------------------------------------
+
 function set-display {
     if is_x11; then
         set-display-x11 "$1"
     else
-        # Wayland - use native DBus management
-        case "$1" in
-            both|top)
-                local user_id=$(id -u carlosh)
-                # Apply display config via DBus (Wayland native)
-                sudo -u carlosh DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$user_id/bus \
-                    /usr/local/bin/wayland-display-mgr.py "$1" 2>/dev/null || \
-                echo "Wayland: Failed to apply config via DBus."
-                
-                # Handle backlight for instant feedback
-                if [ "$1" = "top" ]; then
-                    echo 0 | sudo tee /sys/class/backlight/"$backlight"/brightness >/dev/null 2>&1 || true
-                else
-                    # Restore brightness when turning back on
-                    cat /sys/class/backlight/intel_backlight/brightness | sudo tee /sys/class/backlight/"$backlight"/brightness >/dev/null 2>&1 || true
-                fi
-                ;;
-            bottom)
-                echo "Wayland: Cannot switch to bottom only via script yet."
-                ;;
-        esac
+        set-display-wayland "$1"
     fi
 }
 
-function get-monitor-status {
-    local top_status=$(xrandr 2>/dev/null | grep "$top_display" | grep "connected [0-9]")
-    local bottom_status=$(xrandr 2>/dev/null | grep "$bottom_display" | grep "connected [0-9]")
-    
-    if [ -n "$top_status" ] && [ -n "$bottom_status" ]; then
-        echo "both"
-    elif [ -n "$top_status" ]; then
-        echo "top"
-    elif [ -n "$bottom_status" ]; then
-        echo "bottom"
+# --- External Monitor Position Save/Restore (Wayland DBus) -------------------
+
+function ext-save-wayland {
+    local user_id=$(id -u)
+    if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
+        user_id=$(id -u "$SUDO_USER")
+    fi
+    local dbus_addr="unix:path=/run/user/$user_id/bus"
+
+    local py_cmd='
+import dbus, json, os, subprocess
+
+bus = dbus.SessionBus()
+obj = bus.get_object("org.gnome.Mutter.DisplayConfig", "/org/gnome/Mutter/DisplayConfig")
+iface = dbus.Interface(obj, "org.gnome.Mutter.DisplayConfig")
+serial, monitors, logical_monitors, properties = iface.GetCurrentState()
+
+connector_to_mode = {}
+for m in monitors:
+    connector = m[0][0]
+    current_mode = None
+    for mode_info in m[1]:
+        if "is-current" in mode_info[5] and mode_info[5]["is-current"]:
+            current_mode = mode_info[0]
+            break
+    if not current_mode:
+        current_mode = m[1][0][0]
+    connector_to_mode[connector] = current_mode
+
+ext_monitors = []
+for lm in logical_monitors:
+    x, y, scale, trans, prim, mons, props = lm
+    for m in mons:
+        name = m[0]
+        if name in ("eDP-1", "eDP-2"):
+            continue
+        mode_id = connector_to_mode.get(name, m[1])
+        ext_monitors.append({
+            "connector": name,
+            "x": int(x),
+            "y": int(y),
+            "scale": float(scale),
+            "mode_id": str(mode_id),
+            "transform": int(trans)
+        })
+
+config = {"version": 2, "external_monitors": ext_monitors}
+config_content = json.dumps(config, indent=2)
+
+# Write via sudo tee since /etc/zenbook-duo/ is root-owned
+config_path = "/etc/zenbook-duo/external_positions.json"
+os.makedirs(os.path.dirname(config_path), exist_ok=True)
+proc = subprocess.run(["sudo", "tee", config_path], input=config_content.encode(), capture_output=True)
+if proc.returncode != 0:
+    print("Error writing config: " + proc.stderr.decode())
+    exit(1)
+
+if ext_monitors:
+    for em in ext_monitors:
+        c = em["connector"]
+        x = em["x"]
+        y = em["y"]
+        s = em["scale"]
+        print("  %s: pos=(%d,%d) scale=%.2f" % (c, x, y, s))
+else:
+    print("  No external monitors detected")
+print("Saved to " + config_path)
+'
+
+    if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
+        sudo -u "$SUDO_USER" DBUS_SESSION_BUS_ADDRESS="$dbus_addr" python3 -c "$py_cmd" 2>&1
     else
-        echo "none"
+        DBUS_SESSION_BUS_ADDRESS="$dbus_addr" python3 -c "$py_cmd" 2>&1
     fi
 }
 
-function keyboard-is-attached {
-    lsusb 2>/dev/null | grep -i "0b05:1b2c"
-}
-
-function check-session-type {
-    if is_x11; then
-        echo "X11 session - full display control available"
-    else
-        echo "Wayland session - limited display control (use X11 for full support)"
-    fi
-}
-
-case "$1" in
-  session-type|check-session)
-    check-session-type
-    ;;
-  save-ext)
-    # Save current positions and scales of external monitors
-    # Format from xrandr: HDMI-1 connected 1920x1080+2880+0
-    xrandr | grep " connected" | grep -v "eDP" | while read -r line; do
-        name=$(echo "$line" | awk '{print $1}')
-        # Extract the +X+Y part and convert to XxY
-        pos=$(echo "$line" | grep -oP '\+\d+\+\d+' | sed 's/+//' | sed 's/+/x/')
-        # Extract scale from 'xrandr --verbose'
-        # Looking for the first number after 'Transform:'
-        scale=$(xrandr --verbose | grep -A 1 "^$name connected" -A 10 | grep "Transform:" | awk '{print $2}')
-        # Convert 1.250000 to 1.25
+function ext-save-x11 {
+    # X11: save from xrandr
+    local tmp_content=""
+    xrandr 2>/dev/null | grep " connected" | grep -v "eDP" | while read -r line; do
+        local name=$(echo "$line" | awk '{print $1}')
+        local pos=$(echo "$line" | grep -oP '\+\d+\+\d+' | sed 's/+//' | sed 's/+/x/')
+        local scale=$(xrandr --verbose 2>/dev/null | grep -A 1 "^$name connected" -A 10 | grep "Transform:" | awk '{print $2}')
         scale=$(echo "$scale" | sed 's/\.0*$//' | sed 's/\.$//')
         if [ -z "$scale" ] || [ "$scale" = "1" ]; then scale="1x1"; else scale="${scale}x${scale}"; fi
-        
+
         if [ -n "$pos" ]; then
             echo "$name $pos $scale"
         fi
     done | sudo tee "$CONFIG_FILE" > /dev/null
     echo "Diseño de monitores externos guardado en $CONFIG_FILE"
-    ;;
-  watch-displays)
-    echo "Monitoring keyboard attach/detach..."
-    while true; do
+}
+
+function ext-list-wayland {
+    local user_id=$(id -u)
+    if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
+        user_id=$(id -u "$SUDO_USER")
+    fi
+    local dbus_addr="unix:path=/run/user/$user_id/bus"
+
+    local py_cmd='
+import dbus
+
+bus = dbus.SessionBus()
+obj = bus.get_object("org.gnome.Mutter.DisplayConfig", "/org/gnome/Mutter/DisplayConfig")
+iface = dbus.Interface(obj, "org.gnome.Mutter.DisplayConfig")
+serial, monitors, logical_monitors, properties = iface.GetCurrentState()
+
+connector_to_mode = {}
+for m in monitors:
+    connector = m[0][0]
+    current_mode = None
+    for mode_info in m[1]:
+        if "is-current" in mode_info[5] and mode_info[5]["is-current"]:
+            current_mode = mode_info[0]
+            break
+    if not current_mode:
+        current_mode = m[1][0][0]
+    connector_to_mode[connector] = current_mode
+
+print("Logical Monitor Layout:")
+for lm in logical_monitors:
+    x, y, scale, trans, prim, mons, props = lm
+    for m in mons:
+        name = m[0]
+        mode_id = connector_to_mode.get(name, m[1])
+        is_ext = name not in ("eDP-1", "eDP-2")
+        marker = " [EXTERNAL]" if is_ext else ""
+        primary = " (primary)" if prim else ""
+        print("  %s: pos=(%d,%d) scale=%.2f mode=%s%s%s" % (name, x, y, scale, mode_id, primary, marker))
+'
+
+    if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
+        sudo -u "$SUDO_USER" DBUS_SESSION_BUS_ADDRESS="$dbus_addr" python3 -c "$py_cmd" 2>/dev/null
+    else
+        DBUS_SESSION_BUS_ADDRESS="$dbus_addr" python3 -c "$py_cmd" 2>/dev/null
+    fi
+}
+
+function ext-restore-wayland {
+    if [ ! -f "$EXT_CONFIG_FILE" ]; then
+        echo "No saved external monitor positions found ($EXT_CONFIG_FILE)"
+        echo "Use 'duo ext-position save' first."
+        return 1
+    fi
+
+    local user_id=$(id -u)
+    if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
+        user_id=$(id -u "$SUDO_USER")
+    fi
+    local dbus_addr="unix:path=/run/user/$user_id/bus"
+
+    local py_cmd='
+import dbus, json
+
+with open("/etc/zenbook-duo/external_positions.json") as f:
+    config = json.load(f)
+
+if not config.get("external_monitors"):
+    print("No external monitors in saved config")
+    exit(0)
+
+bus = dbus.SessionBus()
+obj = bus.get_object("org.gnome.Mutter.DisplayConfig", "/org/gnome/Mutter/DisplayConfig")
+iface = dbus.Interface(obj, "org.gnome.Mutter.DisplayConfig")
+serial, monitors, logical_monitors, properties = iface.GetCurrentState()
+
+connector_to_mode = {}
+for m in monitors:
+    connector = m[0][0]
+    current_mode = None
+    for mode_info in m[1]:
+        if "is-current" in mode_info[5] and mode_info[5]["is-current"]:
+            current_mode = mode_info[0]
+            break
+    if not current_mode:
+        current_mode = m[1][0][0]
+    connector_to_mode[connector] = current_mode
+
+# Build new logical monitors list
+new_lms = []
+
+# Add eDP-1 (always primary)
+edp1_lm = next((lm for lm in logical_monitors if any(m[0] == "eDP-1" for m in lm[5])), None)
+if edp1_lm:
+    x1, y1, scale1, trans1, prim1, mons1, props1 = edp1_lm
+    new_lms.append(dbus.Struct((0, 0, scale1, trans1, True,
+        [dbus.Struct(("eDP-1", connector_to_mode.get("eDP-1", "2880x1800@120.000"), {}), signature="ssa{sv}")]), signature="iiduba(ssa{sv})"))
+
+# Add eDP-2 (below eDP-1 if active)
+edp2_lm = next((lm for lm in logical_monitors if any(m[0] == "eDP-2" for m in lm[5])), None)
+if edp2_lm:
+    x2, y2, scale2, trans2, prim2, mons2, props2 = edp2_lm
+    h1_log = 1030  # default
+    if edp1_lm:
+        edp1_info = next(m for m in monitors if m[0][0] == "eDP-1")
+        for mi in edp1_info[1]:
+            if mi[0] == connector_to_mode.get("eDP-1"):
+                h1_log = int(round(mi[2] / edp1_lm[2]))
+                break
+    new_lms.append(dbus.Struct((0, h1_log, scale2, 0, False,
+        [dbus.Struct(("eDP-2", connector_to_mode.get("eDP-2", "2880x1800@120.000"), {}), signature="ssa{sv}")]), signature="iiduba(ssa{sv})"))
+
+# Add saved external monitors with their saved positions
+for saved in config["external_monitors"]:
+    name = saved["connector"]
+    x = saved["x"]
+    y = saved["y"]
+    scale = saved["scale"]
+    transform = saved.get("transform", 0)
+    mode_id = connector_to_mode.get(name, saved.get("mode_id", ""))
+
+    # Check if this monitor is currently connected
+    currently_connected = any(m[0][0] == name for m in monitors)
+    if not currently_connected:
+        continue
+
+    new_lms.append(dbus.Struct((x, y, scale, transform, False,
+        [dbus.Struct((name, mode_id, {}), signature="ssa{sv}")]), signature="iiduba(ssa{sv})"))
+
+new_lms.sort(key=lambda lm: (lm[0], lm[1]))
+
+try:
+    iface.ApplyMonitorsConfig(dbus.UInt32(serial), dbus.UInt32(2), new_lms, {})
+    restored = [s["connector"] for s in config["external_monitors"]]
+    print("Restored positions for: " + ", ".join(restored))
+except Exception as e:
+    print("Error restoring positions: " + str(e))
+    exit(1)
+'
+
+    if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
+        sudo -u "$SUDO_USER" DBUS_SESSION_BUS_ADDRESS="$dbus_addr" python3 -c "$py_cmd" 2>/dev/null
+    else
+        DBUS_SESSION_BUS_ADDRESS="$dbus_addr" python3 -c "$py_cmd" 2>/dev/null
+    fi
+}
+
+# --- Main Command Dispatch ----------------------------------------------------
+
+case "$1" in
+    session-type|check-session)
+        if is_x11; then
+            echo "X11 session"
+        else
+            echo "Wayland session"
+        fi
+        ;;
+
+    # --- Display Management ---
+    top)
+        set-display top
+        ;;
+    bottom)
+        set-display bottom
+        ;;
+    both)
+        set-display both
+        ;;
+    toggle)
+        current=$(get-monitor-status)
+        if echo "$current" | grep -q "both"; then
+            set-display top
+        else
+            set-display both
+        fi
+        ;;
+    status)
+        get-monitor-status
+        ;;
+    status-full)
+        echo "Session: $XDG_SESSION_TYPE"
+        echo "Model: $MODEL"
+        echo ""
+        if is_x11; then
+            echo "Displays (xrandr):"
+            xrandr --listmonitors 2>/dev/null
+        else
+            ext-list-wayland
+        fi
+        ;;
+    watch-displays)
+        echo "Monitoring keyboard attach/detach..."
+        while true; do
+            if keyboard-is-attached; then
+                set-display top
+            else
+                set-display both
+            fi
+            sleep 3
+        done
+        ;;
+    normal|bottom-up)
         if keyboard-is-attached; then
             set-display top
         else
             set-display both
         fi
-        sleep 3
-    done
-    ;;
-  normal|bottom-up)
-    if keyboard-is-attached; then
-      set-display top
-    else
-      set-display both
-    fi
-    ;;
-  top)
-    set-display top
-    ;;
-  both)
-    set-display both
-    ;;
-  bottom)
-    set-display bottom
-    ;;
-  left-up)
-    set-display left-up
-    ;;
-  right-up)
-    set-display right-up
-    ;;
-  status)
-    get-monitor-status
-    ;;
-  status-full)
-    echo "Session type: $XDG_SESSION_TYPE"
-    echo "Displays:"
-    xrandr --listmonitors 2>/dev/null
-    ;;
-  toggle)
-    current=$(get-monitor-status)
-    if echo "$current" | grep -q "both"; then
-      set-display top
-    else
-      set-display both
-    fi
-    ;;
-  bat-limit)
-    threshold="${2:-80}"
-    echo "$threshold" | suenv tee /sys/class/power_supply/BAT0/charge_control_end_threshold 2>/dev/null
-    echo "Battery limit set to $threshold%"
-    ;;
-  sync-backlight)
-    if keyboard-is-attached; then
-      echo 0 | suenv tee /sys/class/backlight/"$backlight"/brightness >/dev/null 2>&1 || true
-    else
-      cat /sys/class/backlight/intel_backlight/brightness 2>/dev/null | \
-        suenv tee /sys/class/backlight/"$backlight"/brightness >/dev/null 2>&1 || true
-    fi
-    ;;
-  set-kb-backlight)
-    suenv python3 "$(dirname "$0")/bk.py" "$2"
-    ;;
-  watch-backlight)
-    "$0" sync-backlight
-    while inotifywait -e modify /sys/class/backlight/intel_backlight/brightness 2>/dev/null ; do
-      "$0" sync-backlight
-    done
-    ;;
-  model)
-    echo "$MODEL"
-    ;;
-  help|--help|-h)
-    echo "Zenbook Duo Linux - Control Script"
-    echo ""
-    echo "Session: $(check-session-type)"
-    echo ""
-    echo "Usage: duo <command> [args]"
-    echo ""
-    echo "Display Management:"
-    echo "  duo top              - Show only top display"
-    echo "  duo bottom           - Show only bottom display"
-    echo "  duo both             - Show both displays"
-    echo "  duo save-ext         - Save current external monitor layout"
-    echo "  duo toggle           - Toggle between top and both"
-    echo "  duo watch-displays   - Auto-detect keyboard"
-    echo "  duo status           - Show current display status"
-    echo "  duo session-type     - Check X11/Wayland"
-    echo ""
-    echo "Brightness:"
-    echo "  duo sync-backlight   - Sync brightness to bottom screen"
-    echo "  duo watch-backlight  - Auto-sync brightness"
-    echo ""
-    echo "Battery:"
-    echo "  duo bat-limit [n]    - Set battery charge limit (default: 80)"
-    echo ""
-    echo "Keyboard:"
-    echo "  duo set-kb-backlight <0-3> - Set keyboard backlight"
-    echo ""
-    echo "NOTE: For full display control, use X11 session instead of Wayland."
-    ;;
-  *)
-    echo "Usage: duo <top|bottom|both|save-ext|toggle|status|session-type|bat-limit|sync-backlight|set-kb-backlight|watch-backlight|watch-displays|help>"
-    exit 1
+        ;;
+
+    # --- External Monitor Positions ---
+    save-ext)
+        if is_x11; then
+            ext-save-x11
+        else
+            echo "Saving external monitor positions..."
+            ext-save-wayland
+        fi
+        ;;
+    ext-position)
+        case "$2" in
+            save)
+                if is_x11; then
+                    ext-save-x11
+                else
+                    echo "Saving external monitor positions..."
+                    ext-save-wayland
+                fi
+                ;;
+            restore)
+                if is_x11; then
+                    echo "X11: Position restore uses xrandr args (integrated in display commands)"
+                else
+                    echo "Restoring external monitor positions..."
+                    ext-restore-wayland
+                fi
+                ;;
+            list)
+                if is_x11; then
+                    echo "External monitors (xrandr):"
+                    xrandr 2>/dev/null | grep " connected" | grep -v "eDP"
+                else
+                    ext-list-wayland
+                fi
+                ;;
+            *)
+                echo "Usage: duo ext-position <save|restore|list>"
+                ;;
+        esac
+        ;;
+
+    # --- Brightness ---
+    sync-backlight)
+        if keyboard-is-attached; then
+            echo 0 | suenv tee /sys/class/backlight/"$backlight"/brightness >/dev/null 2>&1 || true
+        else
+            cat /sys/class/backlight/intel_backlight/brightness 2>/dev/null | \
+                suenv tee /sys/class/backlight/"$backlight"/brightness >/dev/null 2>&1 || true
+        fi
+        ;;
+    watch-backlight)
+        "$0" sync-backlight
+        while inotifywait -e modify /sys/class/backlight/intel_backlight/brightness 2>/dev/null ; do
+            "$0" sync-backlight
+        done
+        ;;
+
+    # --- Battery ---
+    bat-limit)
+        threshold="${2:-80}"
+        echo "$threshold" | suenv tee /sys/class/power_supply/BAT0/charge_control_end_threshold 2>/dev/null
+        echo "Battery limit set to $threshold%"
+        ;;
+
+    # --- Keyboard ---
+    set-kb-backlight)
+        suenv python3 "$(dirname "$0")/bk.py" "$2"
+        ;;
+
+    # --- System Info ---
+    model)
+        echo "$MODEL"
+        ;;
+
+    # --- Help ---
+    help|--help|-h)
+        echo "Zenbook Duo Linux - Control Script"
+        echo ""
+        echo "Session: $(is_x11 && echo 'X11' || echo 'Wayland') | Model: $MODEL"
+        echo ""
+        echo "Usage: duo <command> [args]"
+        echo ""
+        echo "Display Management:"
+        echo "  duo top              - Show only top display"
+        echo "  duo bottom           - Show only bottom display"
+        echo "  duo both             - Show both displays"
+        echo "  duo toggle           - Toggle between top and both"
+        echo "  duo status           - Show current display status"
+        echo "  duo status-full      - Show detailed display info"
+        echo "  duo watch-displays   - Auto-detect keyboard attach/detach"
+        echo ""
+        echo "External Monitors:"
+        echo "  duo save-ext         - Save external monitor positions"
+        echo "  duo ext-position save   - Save positions (Wayland DBus)"
+        echo "  duo ext-position restore - Restore saved positions"
+        echo "  duo ext-position list   - Show current positions"
+        echo ""
+        echo "Brightness:"
+        echo "  duo sync-backlight   - Sync brightness to bottom screen"
+        echo "  duo watch-backlight  - Auto-sync brightness (requires inotifywait)"
+        echo ""
+        echo "Battery:"
+        echo "  duo bat-limit [n]    - Set battery charge limit (default: 80)"
+        echo ""
+        echo "Keyboard:"
+        echo "  duo set-kb-backlight <0-3> - Set keyboard backlight"
+        echo ""
+        echo "System:"
+        echo "  duo model            - Show detected model (3k/1080p)"
+        echo "  duo session-type     - Check X11/Wayland"
+        ;;
+    *)
+        echo "Usage: duo <top|bottom|both|toggle|status|status-full|save-ext|ext-position|sync-backlight|watch-backlight|bat-limit|set-kb-backlight|watch-displays|model|session-type|help>"
+        exit 1
+        ;;
 esac
