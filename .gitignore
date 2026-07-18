@@ -11,3 +11,6 @@ __pycache__/
 *~
 .vscode/
 .idea/
+# AI/CodeNest config (auto-generated)
+.cqa/
+.opencode/
