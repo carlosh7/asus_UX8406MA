@@ -43,7 +43,7 @@ else
     OS="unknown"
 fi
 
-echo "[1/8] Installing dependencies for $OS..."
+echo "[1/9] Installing dependencies for $OS..."
 
 case "$OS" in
     ubuntu|debian|pop|linuxmint)
@@ -62,6 +62,13 @@ case "$OS" in
         apt-get install -y -qq $OPTIONAL_PKGS 2>/dev/null || {
             echo "  WARNING: Some optional packages failed to install."
         }
+
+        # System monitoring packages
+        MONITOR_PKGS="btop nvme-cli"
+        echo "  Installing monitoring packages..."
+        apt-get install -y -qq $MONITOR_PKGS 2>/dev/null || {
+            echo "  WARNING: Some monitoring packages failed to install."
+        }
         ;;
     arch|manjaro|endeavouros)
         pacman -Sy --noconfirm
@@ -77,6 +84,12 @@ case "$OS" in
         echo "  Installing optional packages..."
         pacman -S --noconfirm $OPTIONAL_PKGS 2>/dev/null || {
             echo "  WARNING: Some optional packages failed to install."
+        }
+
+        MONITOR_PKGS="btop nvme-cli"
+        echo "  Installing monitoring packages..."
+        pacman -S --noconfirm $MONITOR_PKGS 2>/dev/null || {
+            echo "  WARNING: Some monitoring packages failed to install."
         }
         ;;
     *)
@@ -100,7 +113,7 @@ fi
 # --- Compile and Install Daemon ---------------------------------------------
 
 echo ""
-echo "[2/8] Compiling and installing the daemon..."
+echo "[2/9] Compiling and installing the daemon..."
 cd "$REPO_DIR/daemon"
 make clean 2>/dev/null || true
 if ! make; then
@@ -114,7 +127,7 @@ cd "$REPO_DIR"
 # --- Install CLI Scripts ----------------------------------------------------
 
 echo ""
-echo "[3/8] Installing CLI scripts..."
+echo "[3/9] Installing CLI scripts..."
 
 # Core scripts
 CORE_SCRIPTS="duo bk.py fn-lock.py wayland-display-mgr.py"
@@ -126,7 +139,7 @@ for script in $CORE_SCRIPTS; do
 done
 
 # Service scripts
-SERVICE_SCRIPTS="auto-display.sh light-monitor.sh start.sh toggle-bluetooth.sh kb-light-cycle.sh setup-hotkeys.sh mic-boost.sh setup-displays.sh kb-backlight-unified.sh adaptive-brightness.sh thermal-monitor.sh audio-diagnose.sh audio-calibrate.sh wifi-diagnose.sh test_hardware.sh webcam-diagnose.sh webcam-optimize.sh bt-keyboard-mapper.py zenbook-config.sh suspend-backlight.sh nightlight.sh"
+SERVICE_SCRIPTS="auto-display.sh start.sh toggle-bluetooth.sh setup-hotkeys.sh mic-boost.sh setup-displays.sh kb-backlight-unified.sh adaptive-brightness.sh thermal-monitor.sh audio-diagnose.sh audio-calibrate.sh wifi-diagnose.sh test_hardware.sh webcam-diagnose.sh webcam-optimize.sh bt-keyboard-mapper.py zenbook-config.sh suspend-backlight.sh nightlight.sh ssd-health.sh fn-lock.sh system-health.sh disk-monitor.sh weekly-maintenance.sh zzz-keyboard-light"
 for script in $SERVICE_SCRIPTS; do
     if [ -f "$REPO_DIR/scripts/$script" ]; then
         cp "$REPO_DIR/scripts/$script" "$BIN_DIR/"
@@ -139,7 +152,7 @@ echo "  Installed CLI scripts"
 # --- Configure Audio --------------------------------------------------------
 
 echo ""
-echo "[4/8] Configuring audio optimizations..."
+echo "[4/9] Configuring audio optimizations..."
 
 # Copy EasyEffects profile
 if [ -n "$INSTALL_USER" ]; then
@@ -166,7 +179,7 @@ fi
 # --- WiFi Configuration -----------------------------------------------------
 
 echo ""
-echo "[5/8] Configuring WiFi..."
+echo "[5/9] Configuring WiFi..."
 
 cat > /etc/modprobe.d/iwlwifi-zenbook.conf << 'EOF'
 # Intel Meteor Lake CNVi WiFi - Zenbook Duo UX8406MA
@@ -178,7 +191,7 @@ echo "  WiFi driver options configured"
 # --- Configure Hotkeys ------------------------------------------------------
 
 echo ""
-echo "[6/8] Configuring keyboard hotkeys..."
+echo "[6/9] Configuring keyboard hotkeys..."
 
 if [ -n "$INSTALL_USER" ]; then
     sudo -u "$INSTALL_USER" "$BIN_DIR/setup-hotkeys.sh" 2>/dev/null || true
@@ -188,7 +201,7 @@ fi
 # --- Configure Touch Mapping (Wayland) --------------------------------------
 
 echo ""
-echo "[7/8] Configuring touch mapping..."
+echo "[7/9] Configuring touch mapping..."
 
 # Apply touch mapping for Wayland
 if [ -n "$INSTALL_USER" ]; then
@@ -204,7 +217,7 @@ fi
 # --- Security and Systemd ---------------------------------------------------
 
 echo ""
-echo "[8/8] Setting up security and services..."
+echo "[8/9] Setting up security and services..."
 
 # Udev rules for keyboard backlight
 cat > /etc/udev/rules.d/99-zenbook-keyboard.rules << 'EOF'
@@ -258,6 +271,37 @@ X-GNOME-Autostart-enabled=true
 EOF
     chown "$INSTALL_USER:$INSTALL_USER" "$AUTOSTART_DIR/zenbook-duo.desktop"
     echo "  GNOME autostart configured"
+fi
+
+# --- System Configuration ----------------------------------------------------
+
+echo ""
+echo "[9/9] Applying system configuration..."
+
+# Sysctl performance tuning
+if [ -f "$REPO_DIR/config/sysctl/99-performance.conf" ]; then
+    cp "$REPO_DIR/config/sysctl/99-performance.conf" /etc/sysctl.d/
+    sysctl --system 2>/dev/null || true
+    echo "  Sysctl performance tuning applied"
+fi
+
+# Logrotate configuration
+if [ -f "$REPO_DIR/config/logrotate/zenbook-duo.conf" ]; then
+    cp "$REPO_DIR/config/logrotate/zenbook-duo.conf" /etc/logrotate.d/
+    echo "  Logrotate configuration installed"
+fi
+
+# Auto-cpufreq (if snap is available)
+if command -v snap &>/dev/null; then
+    snap install auto-cpufreq 2>/dev/null && {
+        auto-cpufreq --install 2>/dev/null || true
+        echo "  auto-cpufreq installed"
+    } || echo "  WARNING: auto-cpufreq installation failed"
+fi
+
+# Battery limit service
+if [ -f "$REPO_DIR/systemd/battery-limit.service" ]; then
+    systemctl enable battery-limit.service 2>/dev/null && echo "  Battery limit service enabled"
 fi
 
 # --- Finalize ---------------------------------------------------------------

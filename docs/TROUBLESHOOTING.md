@@ -279,6 +279,164 @@ duo bat-limit 80
 
 ---
 
+### Keyboard Backlight (v4)
+
+#### Backlight doesn't turn on in darkness
+**Problem**: Keyboard backlight stays off even in dark room.
+
+**Diagnosis**:
+```bash
+# Check ALS sensor
+cat /sys/bus/iio/devices/iio:device1/in_illuminance_raw
+# Should be < 2500 in dark room
+
+# Check service
+systemctl status zenbook-light-monitor
+tail -f /var/log/zenbook-kb-backlight.log
+```
+
+**Solution**: ALS sensor might be reading wrong device. Check that the script resolves `iio:device1` (named "als"), not `iio:device0` (accelerometer).
+
+#### Backlight flickers/oscillates between levels
+**Problem**: Keyboard brightness keeps changing up and down.
+
+**Solution**: This was fixed in v4. The backlight now stays at level 1 (fixed) in dark conditions. If you still see flickering:
+```bash
+# Check for competing processes
+ps aux | grep -E "light-monitor|kb-backlight"
+
+# Only zenbook-light-monitor should be running
+systemctl status zenbook-light-monitor
+```
+
+#### Backlight takes too long to turn on after idle
+**Problem**: 2-3 second delay before backlight turns on.
+
+**Solution**: v4 uses 1-second polling when backlight is off. Verify:
+```bash
+grep "CHECK_INTERVAL_IDLE" /usr/local/bin/kb-backlight-unified.sh
+# Should show: CHECK_INTERVAL_IDLE=1
+```
+
+#### Backlight doesn't turn off after 30 seconds
+**Problem**: Keyboard stays lit even without touching it.
+
+**Diagnosis**:
+```bash
+# Check idle detection
+dbus-send --print-reply --dest=org.gnome.Mutter.IdleMonitor \
+    /org/gnome/Mutter/IdleMonitor/Core \
+    org.gnome.Mutter.IdleMonitor.GetIdletime
+
+# Check service environment
+sudo cat /proc/$(pgrep -f kb-backlight-unified)/environ | tr '\0' '\n' | grep DBUS
+```
+
+**Solution**: The service needs `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus` to access GNOME IdleMonitor.
+
+---
+
+### Thermal
+
+#### Fan always at 0 RPM
+**Problem**: `thermal-monitor.sh` shows 0 RPM but fan is spinning.
+
+**Explanation**: On this model, the fan is controlled by the Embedded Controller (EC) and RPM may not be exposed via hwmon. The script controls fan speed via `platform-profile` (quiet/balanced/performance) instead.
+
+#### Temperature thresholds not working
+**Diagnosis**:
+```bash
+# Check CPU temperature
+cat /sys/class/thermal/thermal_zone12/temp  # Divided by 1000 = Celsius
+
+# Check current profile
+cat /sys/devices/platform/asus-nb-wmi/platform-profile/platform-profile-0/profile
+
+# Check thermal log
+tail -20 /var/log/zenbook-thermal.log
+```
+
+---
+
+### SSD Health
+
+#### Check SSD wear level
+```bash
+sudo nvme smart-log /dev/nvme0n1 | grep percentage_used
+# < 10%: Healthy
+# 10-50%: Normal wear
+# > 50%: Consider backup
+# > 80%: Replace SSD
+```
+
+#### SSD temperature warnings
+```bash
+sudo nvme smart-log /dev/nvme0n1 | grep temperature
+# Normal: 30-50°C
+# Warning: > 60°C
+# Critical: > 70°C
+```
+
+---
+
+### Performance
+
+#### High CPU usage after boot
+**Cause**: `auto-cpufreq` or `thermald` initializing.
+
+**Solution**: Wait 30 seconds after boot. If persistent:
+```bash
+sudo auto-cpufreq --monitor  # See what's happening
+sudo systemctl status thermald
+```
+
+#### ZRAM not active
+**Diagnosis**:
+```bash
+cat /proc/swaps  # Should show /dev/zram0
+lszram           # Show ZRAM details
+```
+
+**Solution**:
+```bash
+sudo systemctl restart zramswap
+```
+
+#### Battery draining fast
+**Diagnosis**:
+```bash
+# Check what's consuming power
+sudo powertop --auto-tune  # Temporary fix
+sudo auto-cpufreq --monitor  # Check CPU frequency
+```
+
+**Solution**: Ensure `auto-cpufreq` is running and `powersave` mode is active when idle.
+
+---
+
+### Unattended Upgrades
+
+#### Reboot not happening after updates
+**Diagnosis**:
+```bash
+# Check if reboot is required
+cat /var/run/reboot-required
+
+# Check unattended-upgrades config
+grep "Automatic-Reboot" /etc/apt/apt.conf.d/50unattended-upgrades
+```
+
+**Solution**: Ensure `Unattended-Upgrade::Automatic-Reboot "true"` is set.
+
+#### Want to disable auto-reboot temporarily
+```bash
+# Temporary: create lock file
+sudo touch /var/run/reboot-required
+# This prevents reboot until removed
+```
+
+---
+
 ## Getting Help
 
 1. Check logs:
@@ -287,5 +445,18 @@ sudo journalctl -xe
 dmesg | grep -i "error\|fail\|asus"
 ```
 
-2. Test each component individually
-3. Open issue at: https://github.com/your-repo/zenbook-duo-linux/issues
+2. Run diagnostics:
+```bash
+sudo /usr/local/bin/system-health.sh  # Full system check
+sudo /usr/local/bin/ssd-health.sh     # SSD health
+fn-lock.sh                             # Fn-lock status
+```
+
+3. Check service logs:
+```bash
+journalctl -u zenbook-light-monitor -f   # Backlight
+journalctl -u zenbook-thermal -f         # Thermal
+journalctl -u zenbook-duo -f             # Daemon
+```
+
+4. Open issue: https://github.com/carlosh7/asus_UX8406MA/issues

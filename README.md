@@ -10,12 +10,16 @@
 |---------|--------|
 | **Dual Screen Management** | Auto-switch bottom screen on keyboard attach/detach |
 | **Touch Screen Mapping** | Both screens respond to touch correctly |
-| **Keyboard Backlight** | Auto-adjusts based on ambient light |
+| **Keyboard Backlight** | Auto-adjusts with 30s idle timeout, 1s wake-up, debounce |
 | **Adaptive Brightness** | Screen brightness adapts to environment with manual override |
-| **Thermal Control** | Auto fan profile based on CPU temperature |
-| **Audio Profiles** | EasyEffects config for 4-speaker system |
-| **WiFi Optimization** | iwlwifi config to prevent soft lockups |
-| **Battery Protection** | Charge limit (default 80%) |
+| **Thermal Control** | Auto fan profile (quiet/balanced/performance) based on CPU temp |
+| **Audio Profiles** | EasyEffects config for 4-speaker Harman Kardon system |
+| **Battery Protection** | Charge limit (default 80%) for longevity |
+| **SSD Health Monitoring** | NVMe SMART health, wear level, temperature |
+| **CPU Optimization** | auto-cpufreq daemon for dynamic governor management |
+| **Security Hardening** | SSH hardening, UFW firewall, Fail2Ban |
+| **Performance Tuning** | Sysctl optimization, ZRAM swap, journal limits |
+| **Automated Maintenance** | Weekly cleanup, disk monitoring, auto-upgrades |
 
 ---
 
@@ -34,11 +38,14 @@ Then restart your session.
 ## Supported Hardware
 
 - **Model**: ASUS Zenbook Duo 2024 (UX8406MA)
+- **CPU**: Intel Core Ultra 9 185H (16 cores, 22 threads)
+- **RAM**: 32GB LPDDR5x
 - **Display**: Dual 3K OLED (2880x1800 @ 120Hz)
 - **Touch**: Dual ELAN touch controllers
 - **Audio**: Realtek ALC294 + CS35L41 smart amplifiers
 - **WiFi**: Intel Meteor Lake CNVi
 - **Keyboard**: USB + Bluetooth dual-mode
+- **SSD**: WD PC SN560 1TB NVMe
 
 ---
 
@@ -59,10 +66,23 @@ duo sync-backlight          # Sync screen brightness
 duo bat-limit 80            # Set charge limit
 
 # Diagnostics
-test_hardware.sh            # Full system test
-audio-diagnose.sh           # Audio check
-wifi-diagnose.sh            # WiFi check
+sudo system-health.sh       # Full system dashboard
+sudo ssd-health.sh          # SSD health check
+fn-lock.sh                  # Fn-lock status
+
+# Maintenance
+sudo weekly-maintenance.sh  # Manual cleanup
 ```
+
+---
+
+## Documentation
+
+- [Installation Guide](docs/INSTALL.md)
+- [Command Reference](docs/USAGE.md)
+- [Hardware Specs](SPEC.md)
+- [System Hardening & Performance](docs/SYSTEM-HARDENING.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
 
 ---
 
@@ -70,18 +90,51 @@ wifi-diagnose.sh            # WiFi check
 
 | Distro | Status |
 |--------|--------|
-| Ubuntu 24.04+ | ✅ Full support |
-| Arch Linux | ✅ Full support |
-| Debian 12+ | ✅ Full support |
-| Pop!_OS, Mint | ✅ Should work |
+| Ubuntu 24.04+ | Full support |
+| Arch Linux | Full support |
+| Debian 12+ | Full support |
+| Pop!_OS, Mint | Should work |
 
 ---
 
-## Documentation
+## System Requirements
 
-- [Installation Guide](INSTALL.md)
-- [Command Reference](USAGE.md)
-- [Hardware Specs](SPEC.md)
+- Ubuntu 24.04 LTS or newer (GNOME desktop recommended)
+- 32GB RAM recommended (for ZRAM optimization)
+- NVMe SSD (for health monitoring)
+
+---
+
+## What Gets Installed
+
+### Services (Systemd)
+| Service | Purpose |
+|---------|---------|
+| `zenbook-duo` | Main daemon (display, keyboard detection) |
+| `zenbook-light-monitor` | Keyboard backlight v4 (idle, debounce, 1s wake) |
+| `zenbook-thermal` | Auto fan profile |
+| `zenbook-adaptive-brightness` | Screen brightness adaptation |
+| `brightness-sync` | Dual display brightness sync |
+| `zenbook-config` | Restore config on boot |
+| `battery-limit` | 80% charge limit |
+| `auto-cpufreq` | Dynamic CPU governor |
+
+### Scripts
+| Script | Purpose |
+|--------|---------|
+| `system-health.sh` | System health dashboard |
+| `ssd-health.sh` | NVMe SSD health check |
+| `fn-lock.sh` | Fn-lock status |
+| `disk-monitor.sh` | Disk space alerts |
+| `weekly-maintenance.sh` | Automated weekly cleanup |
+
+### Packages
+| Package | Purpose |
+|---------|---------|
+| `btop` | Modern system monitor |
+| `nvme-cli` | NVMe management |
+| `auto-cpufreq` (snap) | CPU frequency optimization |
+| `openssh-server` | SSH access |
 
 ---
 
