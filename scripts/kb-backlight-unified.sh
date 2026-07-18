@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================================
-# Zenbook Duo Linux - Unified Keyboard Backlight Manager v3
-# v3: Level 1 fixed when active + debounce (10s minimum between changes)
+# Zenbook Duo Linux - Unified Keyboard Backlight Manager v4
+# v4: Faster idle wake-up (1s polling when off, 3s when on)
 # ============================================================================
 
 BK_SCRIPT="/usr/local/bin/bk.py"
@@ -12,9 +12,10 @@ LOG_FILE="/var/log/zenbook-kb-backlight.log"
 
 # --- Configuration -----------------------------------------------------------
 
-CHECK_INTERVAL=3            # Seconds between checks
+CHECK_INTERVAL_ACTIVE=3     # Seconds between checks when backlight is ON
+CHECK_INTERVAL_IDLE=1       # Seconds between checks when backlight is OFF (fast wake-up)
 INACTIVITY_TIMEOUT=30000    # 30 seconds idle -> turn off backlight
-DEBOUNCE_SEC=10             # Minimum seconds between level changes
+DEBOUNCE_SEC=10             # Minimum seconds between level changes (when ON)
 
 # Light thresholds (raw ALS values, scale=0.001)
 LIGHT_BRIGHT=2500     # >2500 raw -> level 0 (off, bright enough)
@@ -77,8 +78,8 @@ set_keyboard_backlight() {
 
     if [ "$level" != "$current_level" ]; then
         # Debounce: skip if last change was < DEBOUNCE_SEC ago
-        # Exception: allow turning OFF (level 0) immediately
-        if [ "$level" != "0" ] && ! debounce_ok; then
+        # Exception: allow turning OFF (level 0) or ON from idle immediately
+        if [ "$level" != "0" ] && [ "$current_level" != "0" ] && ! debounce_ok; then
             return 0
         fi
 
@@ -98,7 +99,7 @@ keyboard_is_attached() {
 # --- Main Loop ---------------------------------------------------------------
 
 ALS_PATH=$(resolve_als_path)
-log_msg "Starting v3 | ALS: $ALS_PATH | Timeout: ${INACTIVITY_TIMEOUT}ms | Debounce: ${DEBOUNCE_SEC}s"
+log_msg "Starting v4 | ALS: $ALS_PATH | Timeout: ${INACTIVITY_TIMEOUT}ms | Poll: ${CHECK_INTERVAL_IDLE}s(off)/${CHECK_INTERVAL_ACTIVE}s(on)"
 echo "2" > "$STATE_FILE"
 
 PREV_IDLE_STATE="active"   # "active" or "idle"
@@ -108,7 +109,7 @@ while true; do
     if ! keyboard_is_attached; then
         set_keyboard_backlight "0"
         PREV_IDLE_STATE="active"
-        sleep "$CHECK_INTERVAL"
+        sleep "$CHECK_INTERVAL_IDLE"
         continue
     fi
 
@@ -116,12 +117,13 @@ while true; do
     idle_ms=$(get_idle_ms)
 
     if [ "$idle_ms" -ge "$INACTIVITY_TIMEOUT" ] 2>/dev/null; then
-        # IDLE: turn off backlight
+        # IDLE: turn off backlight, poll fast for wake-up
         if [ "$PREV_IDLE_STATE" != "idle" ]; then
             log_msg "Idle detected (${idle_ms}ms) -> OFF"
             PREV_IDLE_STATE="idle"
         fi
         set_keyboard_backlight "0"
+        sleep "$CHECK_INTERVAL_IDLE"     # Fast polling when off
     else
         # ACTIVE: restore backlight (level 1 if dark, level 0 if bright)
         if [ "$PREV_IDLE_STATE" = "idle" ]; then
@@ -132,7 +134,6 @@ while true; do
         lux=$(get_ambient_light)
         light_level=$(get_light_level "$lux")
         set_keyboard_backlight "$light_level"
+        sleep "$CHECK_INTERVAL_ACTIVE"   # Normal polling when on
     fi
-
-    sleep "$CHECK_INTERVAL"
 done
