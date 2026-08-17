@@ -148,13 +148,25 @@ cd "$REPO_DIR"
 
 echo ""
 echo "[3/10] Installing NPU driver for Intel AI Boost..."
-NPU_DEB_URL="https://github.com/intel/linux-npu-driver/releases/download/v1.33.0/linux-npu-driver-v1.33.0.20260529-26625960453-ubuntu2404.tar.gz"
-NPU_DEB_FILE="/tmp/linux-npu-driver-v1.33.0.tar.gz"
 
 if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
+    # Fetch the latest NPU driver release from GitHub (no hardcoded version)
+    echo "  Checking for latest Intel NPU driver..."
+    LATEST_JSON=$(wget -qO- "https://api.github.com/repos/intel/linux-npu-driver/releases/latest" 2>/dev/null || true)
+    NPU_TAG=$(echo "$LATEST_JSON" | grep -oE '"tag_name": "[^"]*"' | head -1 | cut -d'"' -f4)
+    NPU_DEB_URL=$(echo "$LATEST_JSON" | grep -oE '"browser_download_url": "[^"]*ubuntu2404\.tar\.gz"' | head -1 | cut -d'"' -f4)
+
+    if [ -z "$NPU_DEB_URL" ] || [ -z "$NPU_TAG" ]; then
+        # Fallback to a known good release if GitHub API is unreachable
+        NPU_TAG="v1.35.0"
+        NPU_DEB_URL="https://github.com/intel/linux-npu-driver/releases/download/v1.35.0/linux-npu-driver-v1.35.0.20260722-29947505341-ubuntu2404.tar.gz"
+    fi
+
+    NPU_DEB_FILE="/tmp/linux-npu-driver-${NPU_TAG}.tar.gz"
+    echo "  Latest NPU driver: $NPU_TAG"
+
     # Download NPU driver
     if [ ! -f "$NPU_DEB_FILE" ]; then
-        echo "  Downloading Intel NPU driver v1.33.0..."
         wget -q "$NPU_DEB_URL" -O "$NPU_DEB_FILE" 2>/dev/null || {
             echo "  WARNING: NPU driver download failed"
         }
@@ -163,6 +175,7 @@ if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
     if [ -f "$NPU_DEB_FILE" ]; then
         # Extract and install
         cd /tmp
+        rm -f intel-driver-compiler-npu_*.deb intel-fw-npu_*.deb intel-level-zero-npu_*.deb
         tar -xf "$NPU_DEB_FILE" 2>/dev/null || true
         NPU_DEBS=$(ls intel-driver-compiler-npu_*.deb intel-fw-npu_*.deb intel-level-zero-npu_*.deb 2>/dev/null)
         if [ -n "$NPU_DEBS" ]; then
@@ -175,14 +188,35 @@ if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
         cd "$REPO_DIR"
     fi
 
-    # Install Level Zero loader
-    LIBZE_URL="https://snapshot.ppa.launchpadcontent.net/kobuk-team/intel-graphics/ubuntu/20260324T100000Z/pool/main/l/level-zero-loader/libze1_1.27.0-1~24.04~ppa2_amd64.deb"
-    if [ ! -f /tmp/libze1_*.deb ]; then
-        wget -q "$LIBZE_URL" -O /tmp/libze1.deb 2>/dev/null || true
-    fi
-    if [ -f /tmp/libze1.deb ]; then
-        dpkg -i /tmp/libze1.deb 2>/dev/null || true
-        echo "  Level Zero loader installed"
+    # Install the latest Level Zero loader from the Intel PPA (dynamic version)
+    echo "  Checking for latest Level Zero loader..."
+    DISTRO_ID=$(grep -E "^(VERSION_ID)=" /etc/os-release | cut -d= -f2 | tr -d '"' | head -1)
+    [ -n "$DISTRO_ID" ] || DISTRO_ID="24.04"
+    LIBZE_URL=""
+    for url in \
+        "https://ppa.launchpadcontent.net/kobuk-team/intel-graphics/ubuntu/pool/main/l/level-zero-loader/" \
+        "https://ppa.launchpad.net/kobuk-team/intel-graphics/ubuntu/pool/main/l/level-zero-loader/"; do
+        PPA_INDEX=$(wget -qO- "$url" 2>/dev/null || true)
+        if [ -n "$PPA_INDEX" ]; then
+            # Prefer the exact distro version (e.g. 26.04), fall back to any matching suffix
+            LIBZE_FILE=$(echo "$PPA_INDEX" | grep -oE "libze1_[^\"']*~${DISTRO_ID}~[^\"']*_amd64\.deb" | sort -V | tail -1)
+            [ -z "$LIBZE_FILE" ] && LIBZE_FILE=$(echo "$PPA_INDEX" | grep -oE 'libze1_[^"<]*_amd64\.deb' | sort -V | tail -1)
+            if [ -n "$LIBZE_FILE" ]; then
+                LIBZE_URL="${url}${LIBZE_FILE}"
+                break
+            fi
+        fi
+    done
+
+    if [ -n "$LIBZE_URL" ]; then
+        echo "  Latest Level Zero loader: $(basename "$LIBZE_URL")"
+        wget -q "$LIBZE_URL" -O /tmp/libze1_latest.deb 2>/dev/null || true
+        if [ -f /tmp/libze1_latest.deb ]; then
+            dpkg -i /tmp/libze1_latest.deb 2>/dev/null || true
+            echo "  Level Zero loader installed"
+        fi
+    else
+        echo "  WARNING: Could not determine latest Level Zero loader"
     fi
 
     # Add user to render group for NPU access
@@ -340,13 +374,13 @@ fi
 
 # Install systemd services
 cp "$REPO_DIR/systemd/"*.service /etc/systemd/system/
+
+# Set the run-as user on services that need the graphical session
+# (no hardcoded username in the repo; injected at install time)
 if [ -n "$INSTALL_USER" ]; then
-    sed -i "s/User=carlosh/User=$INSTALL_USER/g" /etc/systemd/system/zenbook-light-monitor.service
-    sed -i "s/Group=carlosh/Group=$INSTALL_USER/g" /etc/systemd/system/zenbook-light-monitor.service
-    sed -i "s/User=carlosh/User=$INSTALL_USER/g" /etc/systemd/system/zenbook-bt-keyboard.service
-    sed -i "s/Group=carlosh/Group=$INSTALL_USER/g" /etc/systemd/system/zenbook-bt-keyboard.service
-    sed -i "s/User=carlosh/User=$INSTALL_USER/g" /etc/systemd/system/mic-boost.service
-    sed -i "s/Group=carlosh/Group=$INSTALL_USER/g" /etc/systemd/system/mic-boost.service
+    for unit in zenbook-light-monitor zenbook-bt-keyboard mic-boost; do
+        sed -i "/^\[Service\]/a User=$INSTALL_USER\nGroup=$INSTALL_USER" "/etc/systemd/system/$unit.service"
+    done
 fi
 systemctl daemon-reload
 

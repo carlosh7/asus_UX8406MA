@@ -4,8 +4,6 @@ After=graphical.target
 
 [Service]
 Type=simple
-User=carlosh
-Group=carlosh
 ExecStart=/usr/local/bin/kb-backlight-unified.sh
 Restart=always
 RestartSec=5

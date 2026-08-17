@@ -4,8 +4,6 @@ After=graphical.target
 
 [Service]
 Type=oneshot
-User=carlosh
-Group=carlosh
 Environment=XDG_RUNTIME_DIR=/run/user/%U
 ExecStart=/usr/local/bin/mic-boost.sh
 RemainAfterExit=yes
