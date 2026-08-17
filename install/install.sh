@@ -307,7 +307,8 @@ cp "$REPO_DIR/config/udev/99-zenbook-duo-amp.rules" /etc/udev/rules.d/99-zenbook
 cp "$REPO_DIR/config/udev/50-usb-power-management.rules" /etc/udev/rules.d/50-usb-power-management.rules
 
 udevadm control --reload-rules 2>/dev/null || true
-udevadm trigger 2>/dev/null || true
+udevadm trigger --action=add --subsystem-match=usb 2>/dev/null || true
+udevadm trigger --action=add --subsystem-match=backlight 2>/dev/null || true
 echo "  Udev rules configured (keyboard, NPU, USB power)"
 
 # Restricted sudoers
@@ -350,13 +351,15 @@ fi
 systemctl daemon-reload
 
 # Enable all services
-SERVICES="zenbook-duo.service brightness-sync.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-config.service battery-limit.service zenbook-nightlight.service zenbook-suspend-backlight.service mic-boost.service zenbook-bt-keyboard.service"
+SERVICES="zenbook-duo.service brightness-sync.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-auto-display.service zenbook-config.service battery-limit.service zenbook-nightlight.service zenbook-suspend-backlight.service mic-boost.service zenbook-bt-keyboard.service"
 for svc in $SERVICES; do
     systemctl enable "$svc" 2>/dev/null && echo "  Enabled: $svc" || echo "  WARNING: Failed to enable $svc"
 done
 
-# Start daemon immediately
-systemctl restart zenbook-duo.service 2>/dev/null || true
+# Start all services immediately (no reboot required for userspace features)
+for svc in $SERVICES; do
+    systemctl start "$svc" 2>/dev/null && echo "  Started: $svc" || echo "  WARNING: Failed to start $svc"
+done
 
 # Create GNOME autostart
 if [ -n "$INSTALL_USER" ]; then
@@ -456,6 +459,23 @@ if [ -n "$INSTALL_USER" ]; then
     echo "  OLED protection configured"
 fi
 
+# --- Verify Installation ----------------------------------------------------
+
+echo ""
+echo "=============================================="
+echo "  VERIFICANDO INSTALACIÓN..."
+echo "=============================================="
+echo ""
+HEALTH_EXIT=0
+if [ -n "$INSTALL_USER" ]; then
+    sudo -u "$INSTALL_USER" "$BIN_DIR/zenbook-health-check.sh" || HEALTH_EXIT=$?
+else
+    "$BIN_DIR/zenbook-health-check.sh" || HEALTH_EXIT=$?
+fi
+if [ $HEALTH_EXIT -ne 0 ]; then
+    ERRORS=$((ERRORS + 1))
+fi
+
 # --- Finalize ---------------------------------------------------------------
 
 echo ""
@@ -482,8 +502,8 @@ echo "    - Sysctl performance tuning"
 echo "    - Spatial audio profile"
 echo ""
 echo "  To finish setup:"
-echo "    1. REBOOT (required for NPU and kernel modules)"
-echo "    2. Run 'sudo zenbook-health-check.sh' to verify"
+echo "    1. REBOOT (required to load kernel modules: audio, WiFi, NPU)"
+echo "    2. After reboot, run 'zenbook-health-check.sh' to confirm everything works"
 echo "    3. Run 'duo help' to see available commands"
 echo "    4. Open EasyEffects and select 'ZenbookDuo' profile"
 echo ""

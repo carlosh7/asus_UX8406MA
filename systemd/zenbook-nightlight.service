@@ -1,12 +1,11 @@
 [Unit]
-Description=Zenbook Duo Night Light (Redshift)
+Description=Zenbook Duo Night Light
 After=graphical.target
 
 [Service]
-Type=simple
+Type=oneshot
 ExecStart=/usr/local/bin/nightlight.sh auto
-Restart=on-failure
-RestartSec=60
+RemainAfterExit=yes
 
 [Install]
 WantedBy=graphical.target
