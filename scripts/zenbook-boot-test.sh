@@ -120,7 +120,8 @@ fi
 # Test 8: D-Bus access (for light monitor)
 echo ""
 echo "8. D-BUS ACCESS"
-DBUS_ADDR="unix:path=/run/user/1000/bus"
+LOGIN_UID=$(id -u "${SUDO_USER:-$USER}" 2>/dev/null || echo 1000)
+DBUS_ADDR="unix:path=/run/user/$LOGIN_UID/bus"
 if [ -S "$DBUS_ADDR" ]; then
     pass "D-Bus session socket exists"
 else
