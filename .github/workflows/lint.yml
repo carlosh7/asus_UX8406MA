@@ -19,11 +19,13 @@ jobs:
           check_templates: false
           severity: warning
 
-      - name: Validate systemd units
+      - name: Validate systemd units syntax
         run: |
           set -e
           for f in systemd/*.service; do
-            systemd-analyze verify "$f" || exit 1
+            # Parse-check only (verify also checks ExecStart binaries, which
+            # only exist after install on the target machine -> false positives here)
+            systemd-analyze --man=no verify "$f" 2>&1 | grep -vE "is not executable|No such file or directory" | grep -q . && exit 1 || true
           done
 
       - name: Validate udev rules syntax
