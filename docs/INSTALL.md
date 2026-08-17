@@ -29,7 +29,7 @@ Este comando descargará todos los archivos necesarios a una carpeta llamada `as
 Escribe lo siguiente:
 
 ```bash
-cd asus_UX8406MA/zenbook-duo-linux
+cd asus_UX8406MA
 ```
 
 ## 🛠️ Paso 4: Ejecutar el Instalador
@@ -44,8 +44,21 @@ sudo ./install/install.sh
 - Instala programas necesarios (drivers de USB, sensores de luz, etc.).
 - Configura el sistema para que el brillo se sincronice solo.
 - Instala el "demonio" (un programa que corre de fondo) para detectar el teclado.
+- **Descarga automáticamente la última versión** de los drivers (NPU, Level Zero).
+- **Inicia todos los servicios** sin necesidad de reiniciar primero.
+- **Verifica todo al final** ejecutando `zenbook-health-check.sh` y mostrando el resultado.
 
-## 🛠️ Paso 5: Configurar los Atajos de Teclado (Opcional pero recomendado)
+## 🛠️ Paso 5: Verificar que todo funciona
+
+Al terminar la instalación, el script ejecuta automáticamente una verificación completa. También puedes ejecutarla tú cuando quieras:
+
+```bash
+zenbook-health-check.sh
+```
+
+Debes ver `✅ ALL CHECKS PASSED` si todo quedó bien.
+
+## 🛠️ Paso 6: Configurar los Atajos de Teclado (Opcional pero recomendado)
 
 Para que las teclas F1-F12 funcionen como teclas de función normales y puedas usar `Super (Windows) + Fx` para el volumen/brillo, ejecuta:
 
@@ -53,9 +66,15 @@ Para que las teclas F1-F12 funcionen como teclas de función normales y puedas u
 setup-hotkeys.sh
 ```
 
-## 🛠️ Paso 6: Reiniciar
+## 🛠️ Paso 7: Reiniciar
 
 Para que todos los cambios surtan efecto (especialmente la detección del teclado y el límite de batería), reinicia tu computadora.
+
+Después de reiniciar, vuelve a ejecutar la verificación para confirmar:
+
+```bash
+zenbook-health-check.sh
+```
 
 ---
 

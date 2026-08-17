@@ -180,7 +180,7 @@ ls /sys/class/power_supply/BAT0/ | grep charge_control
 
 **Solution**:
 ```bash
-cd zenbook-duo-linux/daemon
+cd asus_UX8406MA/daemon
 make
 sudo make install
 ```
@@ -332,7 +332,11 @@ dbus-send --print-reply --dest=org.gnome.Mutter.IdleMonitor \
 sudo cat /proc/$(pgrep -f kb-backlight-unified)/environ | tr '\0' '\n' | grep DBUS
 ```
 
-**Solution**: The service needs `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus` to access GNOME IdleMonitor.
+**Solution**: The service needs the session D-Bus address (`DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/<UID>/bus`, using your user's UID) to access GNOME IdleMonitor. The installer injects the correct user/UID automatically; verify with:
+
+```bash
+cat /etc/systemd/system/zenbook-light-monitor.service   # Check User= and %U expansion
+```
 
 ---
 

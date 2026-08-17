@@ -76,7 +76,7 @@ echo 80 | sudo tee /sys/class/power_supply/BAT0/charge_control_end_threshold  # 
 ```bash
 sudo system-health.sh
 ```
-Muestra: CPU, memoria, disco, Docker, seguridad, servicios.
+Muestra: CPU, memoria, disco, batería, servicios, actualizaciones.
 
 ### Salud del SSD
 ```bash
@@ -98,7 +98,7 @@ cat /var/log/disk-monitor.log
 ### Limpieza Semanal
 ```bash
 # Se ejecuta automaticamente los domingos a las 3 AM
-# Limpia: Docker, snaps viejos, journal, temporales, APT cache
+# Limpia: snaps viejos, journal, temporales, APT cache
 
 # Ejecutar manualmente:
 sudo weekly-maintenance.sh
@@ -113,19 +113,8 @@ journalctl --disk-usage  # Tamanio del journal
 
 ---
 
-## Seguridad
+## Actualizaciones
 
-### Firewall (UFW)
-```bash
-sudo ufw status numbered
-```
-
-### SSH
-- Solo autenticacion por clave (sin passwords)
-- Root login deshabilitado
-- Max 3 intentos de autenticacion
-
-### Actualizaciones
 - Actualizaciones de seguridad: automaticas
 - Reboot automatico: 02:00 AM (si se requiere)
 

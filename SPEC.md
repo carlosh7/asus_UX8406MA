@@ -86,8 +86,6 @@
 
 ## 4. Feature List
 
-## 4. Feature List
-
 ### 4.1 Must Have (MVP) - ✅ COMPLETE
 
 - [x] Display management (duo top/bottom/both)
@@ -113,9 +111,9 @@
 ### 5.1 Manual Install
 
 ```bash
-git clone https://github.com/youruser/zenbook-duo-linux.git
-cd zenbook-duo-linux
-./install/install.sh
+git clone https://github.com/carlosh7/asus_UX8406MA.git
+cd asus_UX8406MA
+sudo ./install/install.sh
 ```
 
 ### 5.2 Dependencies
