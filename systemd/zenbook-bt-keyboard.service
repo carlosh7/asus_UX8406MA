@@ -4,8 +4,8 @@ After=graphical.target
 
 [Service]
 Type=simple
-User=jim
-Group=jim
+User=carlosh
+Group=carlosh
 ExecStart=/usr/local/bin/bt-keyboard-mapper.py
 Restart=on-failure
 RestartSec=5

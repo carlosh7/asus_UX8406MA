@@ -344,6 +344,8 @@ if [ -n "$INSTALL_USER" ]; then
     sed -i "s/Group=carlosh/Group=$INSTALL_USER/g" /etc/systemd/system/zenbook-light-monitor.service
     sed -i "s/User=carlosh/User=$INSTALL_USER/g" /etc/systemd/system/zenbook-bt-keyboard.service
     sed -i "s/Group=carlosh/Group=$INSTALL_USER/g" /etc/systemd/system/zenbook-bt-keyboard.service
+    sed -i "s/User=carlosh/User=$INSTALL_USER/g" /etc/systemd/system/mic-boost.service
+    sed -i "s/Group=carlosh/Group=$INSTALL_USER/g" /etc/systemd/system/mic-boost.service
 fi
 systemctl daemon-reload
 
