@@ -130,7 +130,7 @@ for zone in /sys/class/thermal/thermal_zone*/type; do
     type=$(cat "$zone" 2>/dev/null)
     temp=$(cat "$(dirname "$zone")/temp" 2>/dev/null)
     case "$type" in
-        *gpu*|*GPU*|*dgpu*|*intel*)
+        *gpu*|*intel*)
             log "  $type: $((temp/1000))°C"
             ;;
     esac

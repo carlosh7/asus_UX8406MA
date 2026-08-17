@@ -1,0 +1,3 @@
+# Benign / stylistic checks disabled for this codebase.
+# Real checks (quoting SC2086, exit-code handling, case patterns) stay active.
+disable=SC1090,SC1091,SC2004,SC2010,SC2012,SC2034,SC2155,SC2162

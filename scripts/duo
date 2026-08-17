@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-cd "$(dirname "$(realpath "$0")")"
+cd "$(dirname "$(realpath "$0")")" || exit 1
 
 # ============================================================================
 # Zenbook Duo Linux - Control Script
