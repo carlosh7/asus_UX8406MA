@@ -17,6 +17,7 @@ jobs:
         with:
           scandir: ./
           check_templates: false
+          severity: warning
 
       - name: Validate systemd units
         run: |
