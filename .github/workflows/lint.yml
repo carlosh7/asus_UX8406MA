@@ -1,0 +1,40 @@
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  shellcheck:
+    name: ShellCheck (bash scripts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run ShellCheck on all scripts
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: ./
+          check_templates: false
+
+      - name: Validate systemd units
+        run: |
+          set -e
+          for f in systemd/*.service; do
+            systemd-analyze verify "$f" || exit 1
+          done
+
+      - name: Validate udev rules syntax
+        run: |
+          set -e
+          for f in config/udev/*.rules; do
+            udevadm verify "$f" || exit 1
+          done
+
+      - name: Validate install/uninstall references (no hardcoded user)
+        run: |
+          set -e
+          for f in install/*.sh scripts/*.sh systemd/*.service config/udev/*.rules; do
+            grep -E 'carlosh|jim|run/user/1000' "$f" && { echo "HARDCODED REF IN: $f"; exit 1; } || true
+          done

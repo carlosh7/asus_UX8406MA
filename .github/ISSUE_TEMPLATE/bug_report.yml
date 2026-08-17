@@ -1,0 +1,61 @@
+name: Bug report
+description: Report something not working on your Zenbook Duo
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Fill this in and we'll look into it.
+  - type: input
+    id: model
+    attributes:
+      label: Hardware model
+      description: Your exact ASUS model (e.g. UX8406MA)
+      placeholder: UX8406MA
+    validations:
+      required: true
+  - type: dropdown
+    id: distro
+    attributes:
+      label: Distribution / Desktop
+      options:
+        - Ubuntu 24.04 / Wayland
+        - Ubuntu 26.04 / Wayland
+        - Ubuntu / X11
+        - Debian 12
+        - Arch Linux / Manjaro
+        - Pop!_OS / Linux Mint
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the problem. What did you expect and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: health-check
+    attributes:
+      label: Health check output
+      description: |
+        Run `zenbook-health-check.sh` and paste the full output here. If it fails, this is the most useful info you can give us.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Any related logs, e.g. `journalctl -u zenbook-duo -n 50`.
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: Install method
+      description: How did you install? (git clone + install.sh, modified script, etc.)
+      placeholder: git clone + sudo ./install/install.sh
+    validations:
+      required: true

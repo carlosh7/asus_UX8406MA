@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest an idea or improvement for the project
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! A clear description helps us implement it.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What's missing or annoying that you'd like addressed?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How do you imagine this working?
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - New feature
+        - Improvement to existing feature
+        - Better documentation
+        - Other
+    validations:
+      required: true
