@@ -8,8 +8,10 @@ echo "Configuring GNOME media keys..."
 gsettings set org.gnome.settings-daemon.plugins.media-keys volume-mute "['']"
 gsettings set org.gnome.settings-daemon.plugins.media-keys volume-down "['']"
 gsettings set org.gnome.settings-daemon.plugins.media-keys volume-up "['']"
-gsettings set org.gnome.settings-daemon.plugins.media-keys screen-brightness-down "['']"
-gsettings set org.gnome.settings-daemon.plugins.media-keys screen-brightness-up "['']"
+gsettings set org.gnome.settings-daemon.plugins.media-keys screen-brightness-down "['']" 2>/dev/null || true
+gsettings set org.gnome.settings-daemon.plugins.media-keys screen-brightness-up "['']" 2>/dev/null || true
+gsettings set org.gnome.shell.keybindings screen-brightness-down "['']" 2>/dev/null || true
+gsettings set org.gnome.shell.keybindings screen-brightness-up "['']" 2>/dev/null || true
 gsettings set org.gnome.settings-daemon.plugins.media-keys mic-mute "['']"
 gsettings set org.gnome.settings-daemon.plugins.media-keys help "['']"
 
@@ -17,8 +19,10 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys help "['']"
 gsettings set org.gnome.settings-daemon.plugins.media-keys volume-mute "['F1']"
 gsettings set org.gnome.settings-daemon.plugins.media-keys volume-down "['F2']"
 gsettings set org.gnome.settings-daemon.plugins.media-keys volume-up "['F3']"
-gsettings set org.gnome.settings-daemon.plugins.media-keys screen-brightness-down "['F5']"
-gsettings set org.gnome.settings-daemon.plugins.media-keys screen-brightness-up "['F6']"
+gsettings set org.gnome.settings-daemon.plugins.media-keys screen-brightness-down "['F5']" 2>/dev/null || true
+gsettings set org.gnome.settings-daemon.plugins.media-keys screen-brightness-up "['F6']" 2>/dev/null || true
+gsettings set org.gnome.shell.keybindings screen-brightness-down "['F5']" 2>/dev/null || true
+gsettings set org.gnome.shell.keybindings screen-brightness-up "['F6']" 2>/dev/null || true
 gsettings set org.gnome.settings-daemon.plugins.media-keys mic-mute "['F9']"
 
 # Custom keybindings
