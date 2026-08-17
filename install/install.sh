@@ -315,10 +315,21 @@ echo "  Udev rules configured (keyboard, NPU, USB power)"
 
 # Restricted sudoers
 if [ -n "$INSTALL_USER" ]; then
+    BACKLIGHT_PATHS=""
+    for bl in /sys/class/backlight/*; do
+        if [ -d "$bl" ]; then
+            name=$(basename "$bl")
+            if [ -n "$BACKLIGHT_PATHS" ]; then
+                BACKLIGHT_PATHS="${BACKLIGHT_PATHS}, "
+            fi
+            BACKLIGHT_PATHS="${BACKLIGHT_PATHS}/usr/bin/tee /sys/class/backlight/${name}/brightness"
+        fi
+    done
+
     cat > /etc/sudoers.d/zenbook-duo << EOF
 # Zenbook Duo - Limited sudo access for hardware control
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/tee /sys/class/power_supply/BAT0/charge_control_end_threshold
-$INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/tee /sys/class/backlight/*/brightness
+$INSTALL_USER ALL=(root) NOPASSWD: $BACKLIGHT_PATHS
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/bin/bk.py *
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/bin/fn-lock.py *
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/sbin/rfkill block bluetooth
@@ -330,6 +341,10 @@ fi
 
 # Install systemd services
 cp "$REPO_DIR/systemd/"*.service /etc/systemd/system/
+if [ -n "$INSTALL_USER" ]; then
+    sed -i "s/User=carlosh/User=$INSTALL_USER/g" /etc/systemd/system/zenbook-light-monitor.service
+    sed -i "s/Group=carlosh/Group=$INSTALL_USER/g" /etc/systemd/system/zenbook-light-monitor.service
+fi
 systemctl daemon-reload
 
 # Enable all services
