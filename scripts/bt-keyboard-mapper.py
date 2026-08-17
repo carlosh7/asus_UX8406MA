@@ -27,20 +27,16 @@ FUNCTION_MAP = {
 
 def get_bt_keyboard_abs_device():
     """Find the Bluetooth keyboard ABS_MISC device"""
-    # Known ABS_MISC device for ASUS Zenbook Duo Keyboard
-    # Based on testing: event16 has ABS_MISC capability
-    abs_devices = ["/dev/input/event16", "/dev/input/event17"]
-    
-    for dev in abs_devices:
-        if os.path.exists(dev):
-            path = f"/sys/class/input/{os.path.basename(dev)}/device/name"
-            try:
-                with open(path, 'r') as f:
-                    name = f.read().strip()
-                    if "ASUS Zenbook Duo Keyboard" in name:
-                        return dev
-            except:
-                pass
+    import glob
+    for dev in glob.glob("/dev/input/event*"):
+        name_path = f"/sys/class/input/{os.path.basename(dev)}/device/name"
+        try:
+            with open(name_path, 'r') as f:
+                name = f.read().strip()
+                if "ASUS Zenbook Duo Keyboard" in name:
+                    return dev
+        except Exception:
+            pass
     return None
 
 def monitor_events():

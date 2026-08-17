@@ -121,8 +121,16 @@ else
 fi
 
 # Secondary backlight
+DRM_CARD=""
+for card in /sys/class/drm/card*/; do
+    if [ -f "${card}eDP-1/status" ]; then
+        DRM_CARD=$(basename "$card")
+        break
+    fi
+done
+DRM_CARD="${DRM_CARD:-card1}"
 if ls /sys/class/backlight/ | grep -q "eDP"; then
-    SEC_BL=$(cat /sys/class/backlight/card1-eDP-2-backlight/brightness 2>/dev/null)
+    SEC_BL=$(cat "/sys/class/backlight/${DRM_CARD}-eDP-2-backlight/brightness" 2>/dev/null)
     test_ok "Secondary backlight: $SEC_BL"
 else
     test_warn "Secondary backlight not found"
@@ -230,8 +238,14 @@ echo ""
 
 echo -e "${BLUE}=== Thermal ===${NC}"
 
-# CPU temperature
-CPU_TEMP=$(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null)
+# CPU temperature (dynamic zone: x86_pkg_temp)
+CPU_TEMP=""
+for tz in /sys/class/thermal/thermal_zone*/type; do
+    if [ "$(cat "$tz" 2>/dev/null)" = "x86_pkg_temp" ]; then
+        CPU_TEMP=$(cat "${tz%/*}/temp" 2>/dev/null)
+        break
+    fi
+done
 if [ -n "$CPU_TEMP" ]; then
     TEMP_C=$(($CPU_TEMP / 1000))
     if [ "$TEMP_C" -lt 70 ]; then
@@ -241,18 +255,33 @@ if [ -n "$CPU_TEMP" ]; then
     else
         test_fail "CPU temperature: ${TEMP_C}°C (HOT!)"
     fi
+else
+    test_warn "CPU temperature sensor not found"
 fi
 
-# Fan
-FAN_SPEED=$(cat /sys/class/hwmon/hwmon7/fan1_input 2>/dev/null)
+# Fan (dynamic hwmon: find 'asus' hwmon)
+FAN_SPEED=""
+for hwmon in /sys/class/hwmon/hwmon*/name; do
+    if [ "$(cat "$hwmon" 2>/dev/null)" = "asus" ]; then
+        dir=$(dirname "$hwmon")
+        if [ -f "$dir/fan1_input" ]; then
+            FAN_SPEED=$(cat "$dir/fan1_input" 2>/dev/null)
+            break
+        fi
+    fi
+done
 if [ -n "$FAN_SPEED" ]; then
     test_ok "Fan speed: ${FAN_SPEED} RPM"
+else
+    test_warn "Fan sensor not found"
 fi
 
 # Platform profile
-PROFILE=$(cat /sys/devices/platform/asus-nb-wmi/platform-profile/platform-profile-0/platform-profile 2>/dev/null)
+PROFILE=$(cat /sys/devices/platform/asus-nb-wmi/platform-profile/platform-profile-0/profile 2>/dev/null)
 if [ -n "$PROFILE" ]; then
     test_ok "Thermal profile: $PROFILE"
+else
+    test_warn "Platform profile not found"
 fi
 
 echo ""

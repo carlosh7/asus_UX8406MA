@@ -39,30 +39,30 @@ df -h / /home 2>/dev/null | awk 'NR>1{printf "  %-12s %s de %s (%s usado)\n", $6
 echo "  NVMe Temp:  $(sudo nvme smart-log /dev/nvme0n1 2>/dev/null | grep temperature | awk '{print $3}' || echo 'N/A')°C"
 echo ""
 
-# Docker
-echo "🐳 DOCKER"
-echo "────────"
-docker system df 2>/dev/null | awk 'NR>1{printf "  %-12s Total: %s | Activo: %s | Reclamable: %s\n", $1, $2, $3, $4}'
+# Battery / Power
+echo "🔋 BATERÍA / ENERGÍA"
+echo "────────────────────"
+echo "  Carga:      $(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || echo 'N/A')%"
+echo "  Límite:     $(cat /sys/class/power_supply/BAT0/charge_control_end_threshold 2>/dev/null || echo 'N/A')%"
+echo "  Perfil:     $(cat /sys/devices/platform/asus-nb-wmi/platform-profile/platform-profile-0/profile 2>/dev/null || echo 'N/A')"
 echo ""
 
-# Security
-echo "🔒 SEGURIDAD"
-echo "────────────"
-echo "  UFW:        $(sudo ufw status 2>/dev/null | head -1)"
-echo "  Fail2Ban:   $(systemctl is-active fail2ban)"
-echo "  SSH:        $(systemctl is-active ssh)"
-echo "  Updates:    $(apt list --upgradable 2>/dev/null | grep -c upgradable) paquetes pendientes"
-echo ""
-
-# Services
-echo "⚙️  SERVICIOS CLAVE"
-echo "─────────────────"
-for svc in docker ollama fail2ban thermald; do
+# Hardware services
+echo "⚙️  SERVICIOS HARDWARE"
+echo "─────────────────────"
+for svc in zenbook-duo zenbook-thermal zenbook-light-monitor zenbook-adaptive-brightness brightness-sync zenbook-config tlp thermald; do
     STATUS=$(systemctl is-active $svc 2>/dev/null || echo "unknown")
-    printf "  %-15s %s\n" "$svc" "$STATUS"
+    printf "  %-27s %s\n" "$svc" "$STATUS"
 done
-STATUS=$(systemctl is-active ssh.socket 2>/dev/null || echo "unknown")
-printf "  %-15s %s\n" "ssh" "$STATUS"
+if command -v auto-cpufreq >/dev/null 2>&1; then
+    printf "  %-27s %s\n" "auto-cpufreq" "active"
+fi
+echo ""
+
+# Updates
+echo "🔒 ACTUALIZACIONES"
+echo "─────────────────"
+echo "  Updates:    $(apt list --upgradable 2>/dev/null | grep -c upgradable) paquetes pendientes"
 echo ""
 
 # Last maintenance
@@ -79,6 +79,5 @@ echo "════════════════════════�
 echo "  Comandos útiles:"
 echo "    sudo /usr/local/bin/system-health.sh    # Este dashboard"
 echo "    sudo /usr/local/bin/weekly-maintenance.sh  # Limpieza manual"
-echo "    sudo ufw status numbered                # Reglas firewall"
 echo "    sudo journalctl --disk-usage            # Tamaño del journal"
 echo "════════════════════════════════════════════════════════════════"

@@ -1,0 +1,18 @@
+[Unit]
+Description=Zenbook Duo Bluetooth Keyboard Keycode Mapper
+After=graphical.target
+
+[Service]
+Type=simple
+User=jim
+Group=jim
+ExecStart=/usr/local/bin/bt-keyboard-mapper.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+Environment=DISPLAY=:0
+
+[Install]
+WantedBy=graphical.target

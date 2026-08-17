@@ -129,10 +129,7 @@ int sysfs_read(const char *path, char *buf, size_t len) {
 void exec_cmd(const char *cmd, const char *arg1) {
     pid_t pid = fork();
     if (pid == 0) {
-        /* Child process - set DISPLAY for X11 */
-        setenv("DISPLAY", ":1", 1);
-        setenv("XAUTHORITY", "/run/user/1000/Xauthority", 1);
-        /* Child process */
+        /* Child process - session detected via loginctl by duo */
         if (arg1) {
             execlp(cmd, cmd, arg1, (char *)NULL);
         } else {
@@ -149,13 +146,13 @@ void exec_cmd(const char *cmd, const char *arg1) {
 void set_display_both() {
     exec_cmd("duo", "both");
     usleep(500000);  // Wait 500ms for display to switch
-    exec_cmd("setup-touch-x11.sh", NULL);  // Apply touch mapping
+    exec_cmd("touch-remap.sh", NULL);  // Re-map touch to active displays (Wayland)
 }
 
 void set_display_top() {
     exec_cmd("duo", "top");
     usleep(500000);  // Wait 500ms for display to switch
-    exec_cmd("setup-touch-x11.sh", NULL);  // Apply touch mapping
+    exec_cmd("touch-remap.sh", NULL);  // Re-map touch to active displays (Wayland)
 }
 
 void sync_brightness(const Config *cfg) {
@@ -182,7 +179,25 @@ void load_config(Config *cfg) {
     cfg->poll_interval = 2;
     strcpy(cfg->brightness_main, "/sys/class/backlight/intel_backlight/brightness");
     strcpy(cfg->brightness_bottom, "/sys/class/backlight/card1-eDP-2-backlight/brightness");
-    
+
+    /* Detect the DRM card exposing eDP panels (card0 on older Ubuntu, card1+ newer) */
+    char detected_bottom[256] = {0};
+    const char *bpath = "/sys/class/backlight";
+    DIR *bdir = opendir(bpath);
+    if (bdir) {
+        struct dirent *be;
+        while ((be = readdir(bdir)) != NULL) {
+            if (be->d_name[0] == '.') continue;
+            if (strstr(be->d_name, "-eDP-2-backlight") != NULL) {
+                snprintf(detected_bottom, sizeof(detected_bottom),
+                         "%s/%s/brightness", bpath, be->d_name);
+                strcpy(cfg->brightness_bottom, detected_bottom);
+                break;
+            }
+        }
+        closedir(bdir);
+    }
+
     FILE *fp = fopen(CONF_PATH, "r");
     if (!fp) {
         log_msg("Config file not found, using defaults");
@@ -204,6 +219,11 @@ void load_config(Config *cfg) {
         }
     }
     fclose(fp);
+
+    /* If the configured bottom-backlight path doesn't exist, fall back to the detected one */
+    if (access(cfg->brightness_bottom, F_OK) != 0 && detected_bottom[0] != '\0') {
+        strcpy(cfg->brightness_bottom, detected_bottom);
+    }
     
     log_msg("Config loaded: auto_display=%d, auto_brightness=%d, poll=%ds",
             cfg->auto_display, cfg->auto_brightness, cfg->poll_interval);

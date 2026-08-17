@@ -8,13 +8,12 @@ echo "=== Auto Display ==="
 
 # IMMEDIATELY set correct state based on current keyboard state
 if check_keyboard; then
-    # Keyboard IS attached - turn off bottom screen NOW
-    xrandr --output eDP-2 --off 2>/dev/null
-    echo "Initial: keyboard attached - eDP-2 OFF"
+    # Keyboard IS attached - only top display
+    duo top 2>/dev/null
+    echo "Initial: keyboard attached - top display"
 else
     # Keyboard NOT attached - both screens on
-    xrandr --output eDP-1 --auto --primary 2>/dev/null
-    xrandr --output eDP-2 --mode 2880x1800 --below eDP-1 2>/dev/null
+    duo both 2>/dev/null
     echo "Initial: keyboard detached - both ON"
 fi
 
@@ -29,11 +28,11 @@ while true; do
     
     if [ "$now" != "$last" ]; then
         if [ "$now" = "attached" ]; then
-            xrandr --output eDP-2 --off 2>/dev/null
-            echo "[PUESTO] eDP-2 OFF"
+            duo top 2>/dev/null
+            echo "[PUESTO] top display"
         else
-            xrandr --output eDP-2 --mode 2880x1800 --below eDP-1 2>/dev/null
-            echo "[QUITADO] eDP-2 ON"
+            duo both 2>/dev/null
+            echo "[QUITADO] both displays"
         fi
         last=$now
     fi

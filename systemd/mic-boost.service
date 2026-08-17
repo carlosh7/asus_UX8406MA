@@ -1,12 +1,14 @@
 [Unit]
 Description=Microphone gain boost for internal Digital Microphone
-After=pipewire.service wireplumber.service
-Requires=pipewire.service wireplumber.service
+After=graphical.target
 
 [Service]
 Type=oneshot
+User=jim
+Group=jim
+Environment=XDG_RUNTIME_DIR=/run/user/1000
 ExecStart=/usr/local/bin/mic-boost.sh
 RemainAfterExit=yes
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical.target

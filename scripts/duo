@@ -36,6 +36,19 @@ fi
 
 # --- Model Detection ---------------------------------------------------------
 
+# Detect the DRM card that exposes the eDP panels (card0 on older Ubuntu, card1+ on newer)
+function detect-drm-card {
+    for card in /sys/class/drm/card*/; do
+        if [ -f "${card}eDP-1/status" ]; then
+            basename "$card"
+            return
+        fi
+    done
+    echo "card1"
+}
+
+DRM_CARD=$(detect-drm-card)
+
 function detect-model {
     # Use DMI product name for reliable detection (works on both X11 and Wayland)
     local product=$(cat /sys/class/dmi/id/product_name 2>/dev/null)
@@ -58,14 +71,14 @@ MODEL=$(detect-model)
 
 if [ "$MODEL" = "3k" ]; then
     preferred_resolution="2880x1800@120.00"
-    backlight="card1-eDP-2-backlight"
+    backlight="${DRM_CARD}-eDP-2-backlight"
     ui_scale=1.75
     y_offset=1030
     top_display="eDP-1"
     bottom_display="eDP-2"
 else
     preferred_resolution="1920x1200@60.03"
-    backlight="card1-eDP-2-backlight"
+    backlight="${DRM_CARD}-eDP-2-backlight"
     ui_scale=1
     y_offset=1200
     top_display="eDP-1"
@@ -73,7 +86,7 @@ else
 fi
 
 function suenv {
-    sudo /usr/bin/env "$@"
+    sudo "$@"
 }
 
 # --- USB Detection -----------------------------------------------------------
@@ -699,7 +712,7 @@ case "$1" in
 
     # --- Keyboard ---
     set-kb-backlight)
-        suenv python3 "$(dirname "$0")/bk.py" "$2"
+        suenv "$(dirname "$0")/bk.py" "$2"
         ;;
 
     # --- System Info ---

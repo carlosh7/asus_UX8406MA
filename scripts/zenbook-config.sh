@@ -90,11 +90,8 @@ restore_config() {
         echo "$keyboard_level" > /var/lib/zenbook-duo/kb-backlight.state
     fi
     
-    # Restore battery limit
-    if [ -n "$battery_limit" ]; then
-        echo "Restoring battery limit: $battery_limit%"
-        echo "$battery_limit" | sudo tee /sys/class/power_supply/BAT0/charge_control_end_threshold >/dev/null 2>&1
-    fi
+    # Restore battery limit (managed by battery-limit.service - do not override)
+    echo "Battery limit managed by battery-limit.service (not overridden)"
     
     echo "Configuration restored."
 }

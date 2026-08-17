@@ -207,7 +207,7 @@ for script in $CORE_SCRIPTS; do
 done
 
 # Service scripts
-SERVICE_SCRIPTS="auto-display.sh start.sh kb-light-cycle.sh toggle-bluetooth.sh setup-hotkeys.sh mic-boost.sh setup-displays.sh kb-backlight-unified.sh adaptive-brightness.sh thermal-monitor.sh audio-diagnose.sh audio-calibrate.sh wifi-diagnose.sh test_hardware.sh webcam-diagnose.sh webcam-optimize.sh bt-keyboard-mapper.py zenbook-config.sh suspend-backlight.sh nightlight.sh ssd-health.sh fn-lock.sh system-health.sh disk-monitor.sh weekly-maintenance.sh zzz-keyboard-light oled-protect.sh webcam-privacy.sh firmware-check.sh zenbook-health-check.sh zenbook-boot-test.sh"
+SERVICE_SCRIPTS="auto-display.sh start.sh kb-light-cycle.sh toggle-bluetooth.sh setup-hotkeys.sh mic-boost.sh setup-displays.sh kb-backlight-unified.sh adaptive-brightness.sh thermal-monitor.sh audio-diagnose.sh audio-calibrate.sh wifi-diagnose.sh test_hardware.sh webcam-diagnose.sh webcam-optimize.sh bt-keyboard-mapper.py zenbook-config.sh suspend-backlight.sh nightlight.sh ssd-health.sh fn-lock.sh system-health.sh disk-monitor.sh weekly-maintenance.sh zzz-keyboard-light oled-protect.sh webcam-privacy.sh firmware-check.sh zenbook-health-check.sh zenbook-boot-test.sh touch-remap.sh setup-touch-wayland.sh"
 for script in $SERVICE_SCRIPTS; do
     if [ -f "$REPO_DIR/scripts/$script" ]; then
         cp "$REPO_DIR/scripts/$script" "$BIN_DIR/"
@@ -300,14 +300,11 @@ cat > /etc/udev/rules.d/99-zenbook-npu.rules << 'EOF'
 SUBSYSTEM=="accel", KERNEL=="accel*", MODE="0660", GROUP="render"
 EOF
 
-# USB power management rules (BT wake fix)
-cat > /etc/udev/rules.d/50-usb-power-management.rules << 'EOF'
-# USB Power Management for Zenbook Duo UX8406MA
-# Bluetooth: disable autosuspend (prevents wake issues)
-ACTION=="add", SUBSYSTEM=="usb", ATTR{product}=="*Bluetooth*", ATTR{power/autosuspend}="-1"
-# All other USB devices: enable autosuspend after 2 seconds
-ACTION=="add", SUBSYSTEM=="usb", ATTR{power/autosuspend}="2"
-EOF
+# Udev rule for CS35L41 right amplifier
+cp "$REPO_DIR/config/udev/99-zenbook-duo-amp.rules" /etc/udev/rules.d/99-zenbook-duo-amp.rules
+
+# USB power management rules (BT wake fix) - match by VID/PID
+cp "$REPO_DIR/config/udev/50-usb-power-management.rules" /etc/udev/rules.d/50-usb-power-management.rules
 
 udevadm control --reload-rules 2>/dev/null || true
 udevadm trigger 2>/dev/null || true
@@ -334,6 +331,7 @@ $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/bin/bk.py *
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/bin/fn-lock.py *
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/sbin/rfkill block bluetooth
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/sbin/rfkill unblock bluetooth
+$INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/evtest *
 EOF
     chmod 0440 /etc/sudoers.d/zenbook-duo
     echo "  Sudoers configured for $INSTALL_USER"
@@ -344,11 +342,13 @@ cp "$REPO_DIR/systemd/"*.service /etc/systemd/system/
 if [ -n "$INSTALL_USER" ]; then
     sed -i "s/User=carlosh/User=$INSTALL_USER/g" /etc/systemd/system/zenbook-light-monitor.service
     sed -i "s/Group=carlosh/Group=$INSTALL_USER/g" /etc/systemd/system/zenbook-light-monitor.service
+    sed -i "s/User=carlosh/User=$INSTALL_USER/g" /etc/systemd/system/zenbook-bt-keyboard.service
+    sed -i "s/Group=carlosh/Group=$INSTALL_USER/g" /etc/systemd/system/zenbook-bt-keyboard.service
 fi
 systemctl daemon-reload
 
 # Enable all services
-SERVICES="zenbook-duo.service brightness-sync.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-config.service battery-limit.service"
+SERVICES="zenbook-duo.service brightness-sync.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-config.service battery-limit.service zenbook-nightlight.service zenbook-suspend-backlight.service mic-boost.service zenbook-bt-keyboard.service"
 for svc in $SERVICES; do
     systemctl enable "$svc" 2>/dev/null && echo "  Enabled: $svc" || echo "  WARNING: Failed to enable $svc"
 done
@@ -441,6 +441,12 @@ if [ -n "$INSTALL_USER" ]; then
     chown "$INSTALL_USER:$INSTALL_USER" /var/lib/zenbook-duo
 fi
 echo "  State directory created: /var/lib/zenbook-duo"
+
+# Keyboard backlight log (owned by user so light-monitor service can write)
+touch /var/log/zenbook-kb-backlight.log
+if [ -n "$INSTALL_USER" ]; then
+    chown "$INSTALL_USER:$INSTALL_USER" /var/log/zenbook-kb-backlight.log
+fi
 
 # OLED protection (run for user)
 if [ -n "$INSTALL_USER" ]; then

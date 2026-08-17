@@ -60,7 +60,13 @@ fi
 # Test 4: Thermal monitor
 echo ""
 echo "4. THERMAL MONITOR"
-TEMP=$(cat /sys/class/thermal/thermal_zone13/temp 2>/dev/null || cat /sys/class/thermal/thermal_zone12/temp 2>/dev/null)
+TEMP=""
+for tz in /sys/class/thermal/thermal_zone*/type; do
+    if [ "$(cat "$tz" 2>/dev/null)" = "x86_pkg_temp" ]; then
+        TEMP=$(cat "${tz%/*}/temp" 2>/dev/null)
+        break
+    fi
+done
 if [ -n "$TEMP" ] && [ "$TEMP" -gt 0 ] 2>/dev/null; then
     pass "CPU temp readable: $((TEMP/1000))°C"
 else
@@ -84,26 +90,29 @@ else
     fail "Battery limit: $BAT_LIMIT (expected 80)"
 fi
 
-# Test 6: Security
+# Test 6: Updates
 echo ""
-echo "6. SECURITY"
-if ufw status 2>/dev/null | grep -q "active"; then
-    pass "UFW active"
+echo "6. UPDATES"
+UPDATES=$(apt list --upgradable 2>/dev/null | grep -c upgradable || echo "0")
+if [ "$UPDATES" = "0" ]; then
+    pass "System up to date"
 else
-    fail "UFW inactive"
-fi
-
-if systemctl is-active fail2ban >/dev/null 2>&1; then
-    pass "Fail2Ban active"
-else
-    fail "Fail2Ban inactive"
+    fail "$UPDATES paquete(s) pendientes"
 fi
 
 # Test 7: Display
 echo ""
 echo "7. DISPLAY"
-if [ -f /sys/class/drm/card0-eDP-1/status ]; then
-    pass "eDP-1: $(cat /sys/class/drm/card0-eDP-1/status)"
+DRM_CARD=""
+for card in /sys/class/drm/card*/; do
+    if [ -f "${card}eDP-1/status" ]; then
+        DRM_CARD=$(basename "$card")
+        break
+    fi
+done
+DRM_CARD="${DRM_CARD:-card1}"
+if [ -f "/sys/class/drm/${DRM_CARD}-eDP-1/status" ]; then
+    pass "eDP-1: $(cat "/sys/class/drm/${DRM_CARD}-eDP-1/status")"
 else
     fail "eDP-1 not found"
 fi

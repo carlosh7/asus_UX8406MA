@@ -1,8 +1,13 @@
 # USB Power Management for Zenbook Duo UX8406MA
-# Enable autosuspend for USB devices except Bluetooth
+# Match by VID/PID: product name matching fails for Intel AX211 (empty product)
+# Order matters: udev applies the LAST matching assignment, so generic rule first,
+# then specific overrides after.
 
-# Bluetooth: disable autosuspend (prevents wake issues)
-ACTION=="add", SUBSYSTEM=="usb", ATTR{product}=="*Bluetooth*", ATTR{power/autosuspend}="-1"
+# All other USB devices: enable autosuspend after 2 seconds (only if supported)
+ACTION=="add", SUBSYSTEM=="usb", TEST=="power/autosuspend", ATTR{power/autosuspend}="2"
 
-# All other USB devices: enable autosuspend after 2 seconds
-ACTION=="add", SUBSYSTEM=="usb", ATTR{power/autosuspend}="2"
+# Bluetooth (Intel AX211): disable autosuspend (prevents wake issues)
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="8087", ATTR{idProduct}=="0033", ATTR{power/autosuspend}="-1"
+
+# USB keyboard (0b05:1b2c): disable autosuspend (instant response)
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="0b05", ATTR{idProduct}=="1b2c", ATTR{power/autosuspend}="-1"

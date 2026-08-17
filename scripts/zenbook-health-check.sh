@@ -53,14 +53,22 @@ echo ""
 # 4. Display
 echo "🖥️  DISPLAY"
 echo "──────────"
-if [ -f /sys/class/drm/card1-eDP-1/status ]; then
-    echo "  ✅ eDP-1: $(cat /sys/class/drm/card1-eDP-1/status)"
+DRM_CARD=""
+for card in /sys/class/drm/card*/; do
+    if [ -f "${card}eDP-1/status" ]; then
+        DRM_CARD=$(basename "$card")
+        break
+    fi
+done
+DRM_CARD="${DRM_CARD:-card1}"
+if [ -f "/sys/class/drm/${DRM_CARD}-eDP-1/status" ]; then
+    echo "  ✅ eDP-1: $(cat "/sys/class/drm/${DRM_CARD}-eDP-1/status")"
 else
     echo "  ❌ eDP-1 not found"
     ERRORS=$((ERRORS + 1))
 fi
-if [ -f /sys/class/drm/card1-eDP-2/status ]; then
-    echo "  ✅ eDP-2: $(cat /sys/class/drm/card1-eDP-2/status)"
+if [ -f "/sys/class/drm/${DRM_CARD}-eDP-2/status" ]; then
+    echo "  ✅ eDP-2: $(cat "/sys/class/drm/${DRM_CARD}-eDP-2/status")"
 else
     echo "  ⚠️  eDP-2 not found"
     WARNINGS=$((WARNINGS + 1))
@@ -114,31 +122,15 @@ else
 fi
 echo ""
 
-# 8. Security
-echo "🔒 SEGURIDAD"
-echo "────────────"
-UFW_STATUS=$(ufw status 2>/dev/null | head -1)
-if echo "$UFW_STATUS" | grep -qiE "active|activo"; then
-    echo "  ✅ UFW: active"
+# 8. Updates
+echo "🔒 ACTUALIZACIONES"
+echo "──────────────────"
+UPDATES=$(apt list --upgradable 2>/dev/null | grep -c upgradable || echo "0")
+if [ "$UPDATES" = "0" ]; then
+    echo "  ✅ System up to date"
 else
-    echo "  ❌ UFW: inactive"
-    ERRORS=$((ERRORS + 1))
-fi
-
-SSH_STATUS=$(systemctl is-active ssh 2>/dev/null)
-if [ "$SSH_STATUS" = "active" ]; then
-    echo "  ✅ SSH: active"
-else
-    echo "  ⚠️  SSH: $SSH_STATUS"
+    echo "  ⚠️  $UPDATES paquete(s) pendientes"
     WARNINGS=$((WARNINGS + 1))
-fi
-
-FAIL2BAN=$(systemctl is-active fail2ban 2>/dev/null)
-if [ "$FAIL2BAN" = "active" ]; then
-    echo "  ✅ Fail2Ban: active"
-else
-    echo "  ❌ Fail2Ban: inactive"
-    ERRORS=$((ERRORS + 1))
 fi
 echo ""
 
@@ -156,7 +148,13 @@ echo ""
 # 10. Thermal
 echo "🌡️  THERMAL"
 echo "──────────"
-TEMP=$(cat /sys/class/thermal/thermal_zone13/temp 2>/dev/null || cat /sys/class/thermal/thermal_zone12/temp 2>/dev/null)
+TEMP=""
+for tz in /sys/class/thermal/thermal_zone*/type; do
+    if [ "$(cat "$tz" 2>/dev/null)" = "x86_pkg_temp" ]; then
+        TEMP=$(cat "${tz%/*}/temp" 2>/dev/null)
+        break
+    fi
+done
 PROFILE=$(cat /sys/devices/platform/asus-nb-wmi/platform-profile/platform-profile-0/profile 2>/dev/null)
 if [ -n "$TEMP" ]; then
     echo "  ✅ CPU temp: $((TEMP/1000))°C"

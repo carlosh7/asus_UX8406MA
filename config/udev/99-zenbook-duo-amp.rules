@@ -1,0 +1,3 @@
+# ASUS Zenbook Duo UX8406MA - Auto-load CS35L41 right amplifier
+# amixer -c %k expands to "card0" which amixer rejects; use fixed card index
+ACTION=="add", SUBSYSTEM=="sound", KERNEL=="card0", RUN+="/bin/bash -c \"sleep 1 && amixer -c 0 cset numid=5 1 >/dev/null 2>&1\""
