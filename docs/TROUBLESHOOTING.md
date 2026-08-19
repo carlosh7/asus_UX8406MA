@@ -29,6 +29,36 @@ duo sync-backlight
 
 ---
 
+### Audio
+
+#### No sound from internal speakers (CS35L41 smart amps)
+**Problem**: Speakers are silent, or audio worked at some point but then stopped. The amps fail to power up:
+
+```
+cs35l41-hda ...: Failed waiting for CS35L41_PUP_DONE_MASK: -110
+```
+
+**Diagnosis**:
+```bash
+# Count power-up timeouts in the current boot (0 = healthy)
+journalctl -k -b --no-pager | grep -c "CS35L41_PUP_DONE_MASK: -110"
+```
+
+**Cause**: Known kernel bug (bugzilla 221161) caused by the two CS35L41 amps sharing a single reset GPIO. It is intermittent: the same kernel/config can boot fine and then fail on the next boot. Once the amps are in the bad state, **a reboot does NOT recover them** — rebooting keeps the amps powered via the Embedded Controller, so the bad state persists across `reboot` and even kernel upgrades.
+
+**Fix**: Shut down completely (full S5 power-off, not reboot), wait ~30 seconds, then power on:
+```bash
+sudo poweroff
+```
+
+**Prevention**: Run the health check or audio diagnose to verify the amps actually powered up (they validate real PUP_DONE state, not just that the driver loaded):
+```bash
+zenbook-health-check.sh   # reports PUP_DONE errors as a hard failure
+audio-diagnose.sh         # CS35L41 section reports power-up timeouts
+```
+
+---
+
 ### Display
 
 #### "No displays found" or displays not toggling

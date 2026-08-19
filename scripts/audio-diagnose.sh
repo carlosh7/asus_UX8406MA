@@ -109,6 +109,29 @@ else
     check_warn "No audio modprobe config (using defaults)"
 fi
 
+# --- CS35L41 Amplifier State ------------------------------------------------
+
+echo ""
+echo -e "${BLUE}=== CS35L41 Smart Amplifiers ===${NC}"
+
+if lsmod | grep -q "snd_hda_scodec_cs35l41"; then
+    check_ok "CS35L41 smart amp driver loaded"
+    # Count PUP_DONE power-up timeouts in the current boot
+    PUP_ERRORS=$(journalctl -k -b --no-pager 2>/dev/null | grep -c "CS35L41_PUP_DONE_MASK: -110" || true)
+    if [ -n "$PUP_ERRORS" ] && [ "$PUP_ERRORS" -gt 0 ]; then
+        check_fail "$PUP_ERRORS CS35L41 PUP_DONE timeout(s) in this boot (amps not powered up)"
+        echo ""
+        echo -e "  ${RED}Known ASUS shared-reset bug (bugzilla 221161).${NC}"
+        echo "  A reboot does NOT cut power to the amps, so the bad state persists."
+        echo "  Fix: shut down completely, wait ~30s, then power on:"
+        echo "      sudo poweroff"
+    else
+        check_ok "CS35L41 amps powered up cleanly (0 PUP_DONE errors)"
+    fi
+else
+    check_warn "CS35L41 smart amp driver not loaded (may affect speaker quality)"
+fi
+
 # --- EasyEffects -----------------------------------------------------------
 
 echo ""

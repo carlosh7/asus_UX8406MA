@@ -239,14 +239,23 @@ if [ -n "$GRAPHICAL_USER" ]; then
 fi
 echo ""
 
-# 11. Audio (module may need reboot)
+# 11. Audio (CS35L41 smart amps may need a FULL power-off to recover)
 echo "🔊 AUDIO"
 echo "────────"
-if [ -d /sys/module/snd_hda_intel ]; then
-    if pgrep -x pipewire >/dev/null 2>&1; then
-        echo "  ✅ PipeWire active, audio module loaded"
+AUDIO_MODULE_LOADED=0
+[ -d /sys/module/snd_hda_intel ] && AUDIO_MODULE_LOADED=1
+[ -d /sys/module/snd_sof_pci_intel_mtl ] && AUDIO_MODULE_LOADED=1
+if [ "$AUDIO_MODULE_LOADED" -eq 1 ]; then
+    PUP_ERRORS=$(journalctl -k -b --no-pager 2>/dev/null | grep -c "CS35L41_PUP_DONE_MASK: -110" || true)
+    if [ -n "$PUP_ERRORS" ] && [ "$PUP_ERRORS" -gt 0 ]; then
+        echo "  ❌ CS35L41 amps in broken state ($PUP_ERRORS PUP_DONE error(s))"
+        echo "     Known shared-reset bug: a reboot does NOT recover it."
+        echo "     Fix: sudo poweroff, wait ~30s, power on."
+        ERRORS=$((ERRORS + 1))
+    elif pgrep -x pipewire >/dev/null 2>&1; then
+        echo "  ✅ PipeWire active, audio OK (0 PUP_DONE errors)"
     else
-        echo "  ⚠️  Audio module loaded but PipeWire not running"
+        echo "  ⚠️  Audio module loaded, amps OK, but PipeWire not running"
         WARNINGS=$((WARNINGS + 1))
     fi
 else
