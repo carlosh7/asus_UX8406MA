@@ -51,8 +51,10 @@ def monitor_events():
     print("")
     
     try:
+        # Sin sudo: el instalador añade al usuario al grupo input (0660)
+        cmd_evtest = [] if os.geteuid() == 0 else ["sudo", "evtest"]
         proc = subprocess.Popen(
-            ["sudo", "evtest", device],
+            cmd_evtest + ["evtest", device],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True

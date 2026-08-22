@@ -198,6 +198,33 @@ void load_config(Config *cfg) {
         closedir(bdir);
     }
 
+    /* Fallback del principal: si el path por defecto no existe, usar el primer
+       backlight "raw" que no sea el inferior (p.ej. renombres de kernel) */
+    if (access(cfg->brightness_main, F_OK) != 0 && bpath != NULL) {
+        bdir = opendir(bpath);
+        if (bdir) {
+            struct dirent *be;
+            char typebuf[64];
+            while ((be = readdir(bdir)) != NULL) {
+                if (be->d_name[0] == '.') continue;
+                snprintf(typebuf, sizeof(typebuf), "%s/%s/type", bpath, be->d_name);
+                FILE *ft = fopen(typebuf, "r");
+                if (!ft) continue;
+                char t[32] = {0};
+                fgets(t, sizeof(t), ft);
+                fclose(ft);
+                if (strncmp(t, "raw", 3) != 0) continue;
+                char cand[256];
+                snprintf(cand, sizeof(cand), "%s/%s/brightness", bpath, be->d_name);
+                if (strcmp(cand, cfg->brightness_bottom) != 0) {
+                    strcpy(cfg->brightness_main, cand);
+                    break;
+                }
+            }
+            closedir(bdir);
+        }
+    }
+
     FILE *fp = fopen(CONF_PATH, "r");
     if (!fp) {
         log_msg("Config file not found, using defaults");
@@ -300,12 +327,24 @@ int main(int argc, char *argv[]) {
     }
     else if (strcmp(argv[1], "battery") == 0) {
         if (argc > 2) {
-            char path[256];
-            snprintf(path, sizeof(path), "/sys/class/power_supply/BAT0/charge_control_end_threshold");
+            /* Batería dinámica: aplica a todas las BAT* (BAT0/BAT1 según kernel) */
+            DIR *pdir = opendir("/sys/class/power_supply");
+            int applied = 0;
             char val[16];
             snprintf(val, sizeof(val), "%d", atoi(argv[2]));
-            if (sysfs_write(path, val) == 0) {
-                log_msg("Battery limit set to %d%%", atoi(argv[2]));
+            if (pdir) {
+                struct dirent *pe;
+                while ((pe = readdir(pdir)) != NULL) {
+                    if (strncmp(pe->d_name, "BAT", 3) != 0) continue;
+                    char path[256];
+                    snprintf(path, sizeof(path),
+                             "/sys/class/power_supply/%s/charge_control_end_threshold", pe->d_name);
+                    if (sysfs_write(path, val) == 0) applied++;
+                }
+                closedir(pdir);
+            }
+            if (applied > 0) {
+                log_msg("Battery limit set to %d%% (%d battery devices)", atoi(argv[2]), applied);
             } else {
                 log_msg("Failed to set battery limit");
             }

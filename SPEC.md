@@ -49,7 +49,7 @@
 │  CLI Tools (shell + python)                  │
 │  - duo: display management, battery, etc.    │
 │  - bk.py: keyboard backlight                 │
-│  - hotkey_handler.py: F1-F12 mapping        │
+│  - touch-remap.sh: touch↔display mapping (Wayland) │
 ├─────────────────────────────────────────────┤
 │  Daemon (C)                                 │
 │  - keyboard detection (USB/BT)              │

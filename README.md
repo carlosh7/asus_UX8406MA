@@ -7,7 +7,7 @@
 
 **One-command, self-verifying hardware support for the ASUS Zenbook Duo 2024 (UX8406MA).**
 
-Install, configure, and verify — all with a single script. No manual steps, no hardcoded usernames, no leftover "AI/security" bloat. The installer downloads the **latest** compatible drivers automatically.
+Install, configure, and verify — all with a single script. No manual steps, no hardcoded usernames. Core install is AI-free; pass `--with-npu` to optionally add the Intel NPU driver + Level Zero (AI acceleration). The installer downloads the **latest** compatible drivers automatically and verifies their SHA256 against the GitHub release.
 
 ---
 

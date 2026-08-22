@@ -13,6 +13,9 @@ Controla el estado de las dos pantallas OLED de tu Zenbook:
 - `duo status`: Muestra el estado actual de las pantallas.
 - `duo status-full`: Muestra información detallada de monitores (incluyendo externos).
 - `duo watch-displays`: Inicia el monitoreo automático del teclado USB.
+  ⚠️ Solo usar con `auto_display=0` en `/etc/zenbook-duo/zenbook-duo.conf`;
+  si el daemon `zenbook-duo.service` está activo, ambos competirían por
+  alternar pantallas (duplicación).
 
 ## Monitores Externos
 

@@ -6,6 +6,20 @@
 
 set -euo pipefail
 
+# --- Flags ------------------------------------------------------------------
+# --with-npu: instalar driver Intel NPU + Level Zero (IA opcional, no requerido)
+WITH_NPU=0
+for arg in "$@"; do
+    case "$arg" in
+        --with-npu) WITH_NPU=1 ;;
+        --help|-h)
+            echo "Uso: sudo ./install/install.sh [--with-npu]"
+            echo "  --with-npu  Instala driver Intel NPU + Level Zero (opcional)"
+            exit 0 ;;
+        *) echo "Flag desconocida: $arg"; exit 1 ;;
+    esac
+done
+
 REPO_DIR="$(cd "$(dirname "$0")" && cd .. && pwd)"
 BIN_DIR="/usr/local/bin"
 ERRORS=0
@@ -29,7 +43,9 @@ else
 fi
 
 if [ -z "$INSTALL_USER" ]; then
-    echo "WARNING: Cannot detect logged-in user. Some features may not work."
+    echo "ERROR: Cannot detect logged-in user."
+    echo "Run again with: sudo INSTALL_USER=<tu_usuario> ./install/install.sh"
+    exit 1
 fi
 
 USER_HOME=$(getent passwd "$INSTALL_USER" 2>/dev/null | cut -d: -f6 || echo "/home/$INSTALL_USER")
@@ -43,7 +59,7 @@ else
     OS="unknown"
 fi
 
-echo "[1/9] Installing dependencies for $OS..."
+echo "[1/10] Installing dependencies for $OS..."
 
 case "$OS" in
     ubuntu|debian|pop|linuxmint)
@@ -149,7 +165,8 @@ cd "$REPO_DIR"
 echo ""
 echo "[3/10] Installing NPU driver for Intel AI Boost..."
 
-if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
+if [ "$WITH_NPU" -eq 1 ]; then
+    if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
     # Fetch the latest NPU driver release from GitHub (no hardcoded version)
     echo "  Checking for latest Intel NPU driver..."
     LATEST_JSON=$(wget -qO- "https://api.github.com/repos/intel/linux-npu-driver/releases/latest" 2>/dev/null || true)
@@ -160,6 +177,7 @@ if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
         # Fallback to a known good release if GitHub API is unreachable
         NPU_TAG="v1.35.0"
         NPU_DEB_URL="https://github.com/intel/linux-npu-driver/releases/download/v1.35.0/linux-npu-driver-v1.35.0.20260722-29947505341-ubuntu2404.tar.gz"
+        LATEST_JSON=""
     fi
 
     NPU_DEB_FILE="/tmp/linux-npu-driver-${NPU_TAG}.tar.gz"
@@ -170,6 +188,31 @@ if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
         wget -q "$NPU_DEB_URL" -O "$NPU_DEB_FILE" 2>/dev/null || {
             echo "  WARNING: NPU driver download failed"
         }
+    fi
+
+    if [ -f "$NPU_DEB_FILE" ]; then
+        # Verificar SHA256 contra el digest publicado en la release de GitHub
+        NPU_ASSET=$(basename "$NPU_DEB_URL")
+        EXPECTED_SHA=$(printf '%s' "$LATEST_JSON" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    asset_name = '$NPU_ASSET'
+    for a in data.get('assets', []):
+        if a.get('name') == asset_name:
+            print(a.get('digest', '').replace('sha256:', ''))
+            break
+except Exception:
+    pass")
+        ACTUAL_SHA=$(sha256sum "$NPU_DEB_FILE" | cut -d' ' -f1)
+        if [ -n "$EXPECTED_SHA" ] && [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+            echo "  ERROR: checksum mismatch para $NPU_ASSET (esperado $EXPECTED_SHA, real $ACTUAL_SHA)"
+            rm -f "$NPU_DEB_FILE"
+        elif [ -z "$EXPECTED_SHA" ]; then
+            echo "  WARNING: sin digest publicable; se continúa sin verificación"
+        else
+            echo "  Checksum OK ($ACTUAL_SHA)"
+        fi
     fi
 
     if [ -f "$NPU_DEB_FILE" ]; then
@@ -224,9 +267,12 @@ if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
         gpasswd -a "$INSTALL_USER" render 2>/dev/null || true
         echo "  User $INSTALL_USER added to render group"
     fi
+    else
+        echo "  WARNING: NPU driver solo soportado en Ubuntu/Debian"
+    fi
+else
+    echo "  Skipped (flag --with-npu no pasada). El resto del stack funciona sin IA."
 fi
-
-# --- Install CLI Scripts ----------------------------------------------------
 
 echo ""
 echo "[4/10] Installing CLI scripts..."
@@ -323,10 +369,15 @@ echo ""
 echo "[9/10] Setting up security and services..."
 
 # Udev rules for keyboard backlight
-cat > /etc/udev/rules.d/99-zenbook-keyboard.rules << 'EOF'
-# ASUS Zenbook Duo Keyboard - USB access without root
-SUBSYSTEM=="usb", ATTR{idVendor}=="0b05", ATTR{idProduct}=="1b2c", MODE="0666", GROUP="plugdev"
+# 0660+input (no world-writable): los scripts corren como root o con grupo input.
+cat > /etc/udev/rules.d/99-zenbook-keyboard.rules << EOF
+# ASUS Zenbook Duo Keyboard - group access only (no world access)
+SUBSYSTEM=="usb", ATTR{idVendor}=="0b05", ATTR{idProduct}=="1b2c", MODE="0660", GROUP="input"
 EOF
+
+# Garantiza acceso a dispositivos de entrada sin sudo (evtest, mapeos)
+getent group input >/dev/null || groupadd input
+usermod -aG input "$INSTALL_USER"
 
 # Udev rules for NPU access
 cat > /etc/udev/rules.d/99-zenbook-npu.rules << 'EOF'
@@ -360,13 +411,13 @@ if [ -n "$INSTALL_USER" ]; then
 
     cat > /etc/sudoers.d/zenbook-duo << EOF
 # Zenbook Duo - Limited sudo access for hardware control
+# NOTA: sin wildcards en argumentos (evtest/bk/fn-lock eliminados:
+# el usuario pertenece al grupo input y los servicios corren como root).
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/tee /sys/class/power_supply/BAT0/charge_control_end_threshold
+$INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/tee /sys/class/power_supply/BAT1/charge_control_end_threshold
 $INSTALL_USER ALL=(root) NOPASSWD: $BACKLIGHT_PATHS
-$INSTALL_USER ALL=(root) NOPASSWD: /usr/local/bin/bk.py *
-$INSTALL_USER ALL=(root) NOPASSWD: /usr/local/bin/fn-lock.py *
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/sbin/rfkill block bluetooth
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/sbin/rfkill unblock bluetooth
-$INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/evtest *
 EOF
     chmod 0440 /etc/sudoers.d/zenbook-duo
     echo "  Sudoers configured for $INSTALL_USER"

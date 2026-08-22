@@ -1,17 +1,17 @@
 #!/bin/bash
-# Zenbook Duo - Touch Mapping Setup for Wayland
-# Uses dconf with correct device IDs
+# ============================================================================
+# Zenbook Duo - Touch setup (Wayland)
+# Persistente: fija el mapeo táctil correcto en dconf del usuario gráfico.
+#
+# CORREGIDO ago-2026: antes mapeaba invertido (425b→eDP-1, 425a→eDP-2),
+# causando que el touch de la pantalla inferior actuara en la superior.
+# Ahora delega en touch-remap.sh (mapeo + layout + drop de privilegios).
+# ============================================================================
 
-echo "Setting up touch mapping for Wayland..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Tablet mapping
-dconf write "/org/gnome/desktop/peripherals/tablets/04f3:425b/output" "['SDC', '0x419d', '0x00000000', 'eDP-1']" 2>/dev/null
-dconf write "/org/gnome/desktop/peripherals/tablets/04f3:425a/output" "['SDC', '0x419d', '0x00000000', 'eDP-2']" 2>/dev/null
+echo "Zenbook Duo - Touch mapping (Wayland)"
+echo "  ELAN9009 04f3:425a (superior) -> eDP-1"
+echo "  ELAN9008 04f3:425b (inferior) -> eDP-2"
 
-# Touchscreen mapping
-dconf write "/org/gnome/desktop/peripherals/touchscreens/04f3:425b/output" "['SDC', '0x419d', '0x00000000', 'eDP-1']" 2>/dev/null
-dconf write "/org/gnome/desktop/peripherals/touchscreens/04f3:425a/output" "['SDC', '0x419d', '0x00000000', 'eDP-2']" 2>/dev/null
-
-echo "Touch mapping configured"
-echo "  425b (bottom touch) -> eDP-1"
-echo "  425a (top touch) -> eDP-2"
+"$SCRIPT_DIR/touch-remap.sh"
