@@ -31,14 +31,19 @@ KEYCODE_MAP = {
     124: "mic_mute",
 }
 
-# EV_KEY code -> función (fila F7/F10-F12; llegan como teclas estándar)
+# EV_KEY code -> función (fila F7/F10/F11; llegan como teclas estándar)
 # Solo se procesa en value=1 (pulsación)
 EVKEY_MAP = {
     65: "display_toggle",   # KEY_F7  : alternar pantallas
     68: "bt_toggle",        # KEY_F10 : bluetooth
     87: "nightlight",       # KEY_F11 : luz nocturna
-    88: "status_osd",       # KEY_F12 : estado en pantalla
 }
+# F12 (código 88): TRIPLE pulsación rápida (<0.6s entre pulsaciones)
+# alterna Multimedia <-> F1-F12 con notificación y persistencia
+
+F12_CODE = 88
+F12_MAX_GAP = 0.6        # segundos máximos entre pulsaciones consecutivas
+f12_presses = []         # timestamps de la ráfaga actual
 
 BACKLIGHT = "/sys/class/backlight/intel_backlight"
 
@@ -111,7 +116,25 @@ def fnlock_toggle_action():
     global _super_down
     _super_down = False   # consumir el combo
     subprocess.Popen(["/usr/local/bin/fnlock-toggle.sh"])
-    log("  Super+Esc -> toggle F1-F12/Multimedia")
+    log("  toggle F1-F12/Multimedia")
+
+
+def f12_press():
+    """Triple pulsación de F12 = alternar modo de la fila."""
+    global f12_presses
+    now = time.time()
+    # Si la última pulsación es demasiado antigua, reiniciar ráfaga
+    if f12_presses and now - f12_presses[-1] > F12_MAX_GAP:
+        f12_presses = []
+    f12_presses.append(now)
+    log(f"F12 pulsación {len(f12_presses)}")
+    if len(f12_presses) >= 3:
+        gap_ok = (f12_presses[-1] - f12_presses[0]) <= (F12_MAX_GAP * 2)
+        f12_presses = []
+        if gap_ok:
+            fnlock_toggle_action()
+        else:
+            log("  ráfaga demasiado lenta, ignorada")
 
 
 def br_step(direction):
@@ -215,8 +238,11 @@ def parse_line(line, proc_map):
             log(f"ABS_MISC {value} -> {key}")
             execute(key)
         return
-    # Fila de función: EV_KEY estándar (F7/F10/F11/F12) en pulsación
+    # Fila de función: EV_KEY estándar en pulsación
     if "EV_KEY" in line and "value 1" in line:
+        if f"code {F12_CODE} (" in line:
+            f12_press()
+            return
         for code, action in EVKEY_MAP.items():
             if f"code {code} (" in line:
                 log(f"EV_KEY {code} -> {action}")
