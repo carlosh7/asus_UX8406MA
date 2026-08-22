@@ -540,6 +540,16 @@ if [ -n "$INSTALL_USER" ]; then
     chown "$INSTALL_USER:$INSTALL_USER" /var/log/zenbook-kb-backlight.log
 fi
 
+# Config del timeout de luz de teclado (kb-backlight-unified.sh lo lee)
+mkdir -p /etc/zenbook-duo
+cat > /etc/zenbook-duo/kb-backlight.conf << 'EOF'
+# Segundos que la luz del teclado permanece encendida tras dejar de escribir.
+# Cambia este valor y reinicia zenbook-light-monitor.service si lo necesitas.
+INACTIVITY_TIMEOUT=45000
+EOF
+chmod 644 /etc/zenbook-duo/kb-backlight.conf
+echo "  KB backlight config: 45s (editable en /etc/zenbook-duo/kb-backlight.conf)"
+
 # OLED protection (run for user)
 if [ -n "$INSTALL_USER" ]; then
     sudo -u "$INSTALL_USER" "$BIN_DIR/oled-protect.sh" 2>/dev/null || true
