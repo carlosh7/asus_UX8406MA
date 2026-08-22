@@ -441,6 +441,16 @@ for svc in $SERVICES; do
     systemctl enable "$svc" 2>/dev/null && echo "  Enabled: $svc" || echo "  WARNING: Failed to enable $svc"
 done
 
+# Desactivar el ALS propio de GNOME: compite con adaptive-brightness
+if [ -n "$INSTALL_USER" ]; then
+    local_uid=$(id -u "$INSTALL_USER" 2>/dev/null)
+    sudo -u "$INSTALL_USER" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${local_uid}/bus" \
+        XDG_RUNTIME_DIR="/run/user/${local_uid}" \
+        gsettings set org.gnome.settings-daemon.plugins.power ambient-enabled false 2>/dev/null \
+        && echo "  GNOME ALS desactivado (usa zenbook-adaptive-brightness)"
+fi
+
 # Start all services immediately (no reboot required for userspace features)
 for svc in $SERVICES; do
     systemctl start "$svc" 2>/dev/null && echo "  Started: $svc" || echo "  WARNING: Failed to start $svc"

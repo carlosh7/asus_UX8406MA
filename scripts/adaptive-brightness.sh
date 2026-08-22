@@ -29,8 +29,10 @@ PAUSE_THRESHOLD=20000
 # una subida gradual de luz nunca acumulaba el umbral → brillo clavado abajo)
 PAUSE_ALS=0
 PAUSE_TS=0
-MAX_PAUSE_SEC=600          # reanudar automático tras 10 min aunque la luz no cambie mucho
-RESUME_THRESHOLD=20000
+MAX_PAUSE_SEC=180          # reanudar automático 3 min tras un override manual
+RESUME_THRESHOLD=12000     # ~12 lux de cambio respecto a la pausa → reanudar
+STABLE_READS=2             # lecturas idénticas seguidas para considerar un cambio "manual"
+_manual_hits=0
 
 # Config opcional: /etc/zenbook-duo/adaptive-brightness.conf
 [ -f /etc/zenbook-duo/adaptive-brightness.conf ] && \
@@ -132,21 +134,28 @@ while true; do
     fi
     
     # STEP 1: Detect manual change
-    # If brightness changed AND ALS didn't change significantly -> user changed it
+    # Si el brillo cambia con ALS estable durante STABLE_READS ciclos seguidos,
+    # lo tratamos como override manual. Cambios de una sola lectura (animaciones
+    # de GNOME, pasos del mapper) NO pausan.
     als_diff=$((als - LAST_ALS))
     if [ "$als_diff" -lt 0 ]; then als_diff=$((als_diff * -1)); fi
     
     if [ "$current_br" -ne "$LAST_BRIGHTNESS" ] 2>/dev/null && [ "$als_diff" -lt "$PAUSE_THRESHOLD" ] 2>/dev/null; then
-        # User changed brightness manually, ALS stable
-        if [ "$PAUSED" -eq 0 ]; then
-            log_msg "PAUSED (manual: $LAST_BRIGHTNESS -> $current_br, ALS stable)"
-            PAUSED=1
-            PAUSE_ALS=$als
-            PAUSE_TS=$(date +%s)
+        _manual_hits=$((_manual_hits + 1))
+        if [ "$_manual_hits" -ge "$STABLE_READS" ]; then
+            if [ "$PAUSED" -eq 0 ]; then
+                log_msg "PAUSED (manual estable: $LAST_BRIGHTNESS -> $current_br x${_manual_hits})"
+                PAUSED=1
+                PAUSE_ALS=$als
+                PAUSE_TS=$(date +%s)
+            fi
+            _manual_hits=0
         fi
         LAST_BRIGHTNESS=$current_br
         sleep "$CHECK_INTERVAL"
         continue
+    else
+        _manual_hits=0
     fi
     
     # STEP 2: If paused, check resume conditions
