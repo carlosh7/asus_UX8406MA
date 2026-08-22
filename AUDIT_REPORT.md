@@ -117,3 +117,26 @@ No hay `/home/jim` ni usuarios hardcodeados en código de ejecución ✓ (solo U
 | `uname -r` vs requisito kernel | ✓ 7.0.0 ≥ 6.17 |
 | shellcheck local | ✗ binario ausente (compensado por CI) |
 | Aplicación de configs al sistema real | NO realizada (solo lectura) ✓ |
+
+---
+
+## 11. Ejecución Fase 0 (ago-2026)
+
+**Repo** (`git log`: ver commits):
+- install.sh: guard de INSTALL_USER (aborta), numeración [1/10], udev `0660 input`, sudoers sin wildcards (bk/fn-lock/evtest fuera), NPU opcional `--with-npu` + SHA256 contra digest de GitHub API, detección dinámica de backlights pendiente migrar a conf (daemon ya lo hace nativo)
+- bt-keyboard-mapper.py: sin sudo (grupo input)
+- daemon/src/main.c: batería dinámica BAT* + fallback de backlight principal detectado; compilado con make ✓
+- systemd: newline final zenbook-duo.service ✓, battery-limit.service itera BAT*
+- scripts/touch-remap.sh **v2**: drop root→sesión vía loginctl, mapeos dconf explícitos CORRECTOS (425a→eDP-1, 425b→eDP-2), rama `bottom`, escala/offset dinámicos
+- setup-touch-wayland.sh: mapeos invertidos corregidos, delega en touch-remap.sh
+- Docs: README (--with-npu), SPEC (fantasma fuera), STRUCTURE.md regenerado, USAGE nota watch-displays
+
+**Host vivo**:
+- Regla udev aplicada → nodo teclado `crw-rw---- root input` (antes world-writable); jim en grupo `input` (activo tras reinicio)
+- powertop.service disabled+stopped (TLP único gestor activo)
+- Mapeos táctiles escritos en dconf del usuario y persisten tras reinicio
+- Daemon v2 instalado en /usr/local/bin y servicio reiniciado (activo, sync brillo OK)
+
+**Validaciones post-Fase 0**: bash -n todos ✓ · shellcheck archivos nuevos limpio · systemd-analyze verify ✓ · gitleaks 0 fugas · 11/11 unidades activas · 0 failed
+
+**Pendiente**: test físico del usuario del fix táctil (desacoplar teclado → tocar abajo)
