@@ -38,14 +38,27 @@ EVKEY_MAP = {
     68: "bt_toggle",        # KEY_F10 : bluetooth
     87: "nightlight",       # KEY_F11 : luz nocturna
 }
-# F12 (código 88): TRIPLE pulsación rápida (<0.6s entre pulsaciones)
-# alterna Multimedia <-> F1-F12 con notificación y persistencia
+# Super + posición de fila -> F-tecla REAL vía zenbook-sendkey (uinput)
+SUPER_TRANSLATE_EVKEY = {
+    121: 59,   # F1 (mute)      -> KEY_F1
+    114: 60,   # F2 (vol-)      -> KEY_F2
+    115: 61,   # F3 (vol+)      -> KEY_F3
+}
+SUPER_TRANSLATE_ABS = {
+    199: 62,   # F4 (luz kbd)   -> KEY_F4
+    16:  63,   # F5 (br-)       -> KEY_F5
+    32:  64,   # F6 (br+)       -> KEY_F6
+    124: 67,   # F9 (mic)       -> KEY_F9
+}
+SENDKEY_BIN = "/usr/local/bin/zenbook-sendkey"
 
 F12_CODE = 88
 F12_MAX_GAP = 1.0        # segundos máximos entre pulsaciones consecutivas
 F12_LOCKOUT = 1.5        # tras alternar, ignora F12 este tiempo (evita deshacer)
 f12_presses = []         # timestamps de la ráfaga actual
 f12_lockout_until = 0
+ZENBOOK_NODES = set()    # nodos event del teclado desacoplable
+FNLOCK_MODE_FILE = "/etc/zenbook-duo/fnlock-mode"
 
 BACKLIGHT = "/sys/class/backlight/intel_backlight"
 
@@ -212,6 +225,11 @@ def status_osd():
     log("  status OSD")
 
 
+def send_fkey(code):
+    r = subprocess.run([SENDKEY_BIN, str(code)], capture_output=True, text=True)
+    log(f"  Super+fila -> KEY code {code} " + ("ok" if r.returncode == 0 else f"ERROR {r.stderr.strip()}"))
+
+
 def execute(action):
     if action == "kbd_light":
         subprocess.Popen(["/usr/local/bin/kb-light-cycle.sh"])
@@ -241,25 +259,41 @@ def current_fnlock_mode():
         return "0"
 
 
-def parse_line(line, proc_map):
+def parse_line(line, node):
+    global _super_down
+    zenbook_node = node in ZENBOOK_NODES
+
+    # Tracking de Super (cualquier teclado)
+    if "EV_KEY" in line and ("code 125 (" in line or "code 126 (" in line):
+        _super_down = ("value 1" in line)
+
     # Teclas multimedia (USB/BT): eventos ABS_MISC del fabricante
-    if "ABS_MISC" in line and "value" in line:
+    if zenbook_node and "ABS_MISC" in line and "value" in line:
         try:
             value = int(line.split("value")[1].strip())
         except ValueError:
             return
-        if value > 0 and value in KEYCODE_MAP:
-            key = KEYCODE_MAP[value]
-            # En modo función la fila es F1-F12 reales: ignorar códigos vendor
-            # residuales (p.ej. F5 sigue emitiendo su código de brillo)
-            if current_fnlock_mode() == "1":
-                log(f"ABS_MISC {value} ignorado (modo función)")
+        if value > 0:
+            if _super_down and value in SUPER_TRANSLATE_ABS:
+                log(f"Super+ABS_MISC {value} -> F{SUPER_TRANSLATE_ABS[value] - 58}")
+                send_fkey(SUPER_TRANSLATE_ABS[value])
                 return
-            log(f"ABS_MISC {value} -> {key}")
-            execute(key)
+            if value in KEYCODE_MAP:
+                key = KEYCODE_MAP[value]
+                if current_fnlock_mode() == "1":
+                    log(f"ABS_MISC {value} ignorado (modo función)")
+                else:
+                    log(f"ABS_MISC {value} -> {key}")
+                    execute(key)
         return
-    # Fila de función: EV_KEY estándar en pulsación
-    if "EV_KEY" in line and "value 1" in line:
+
+    # Fila de función: EV_KEY estándar en pulsación (solo teclado desacoplable)
+    if zenbook_node and "EV_KEY" in line and "value 1" in line:
+        for tcode, fkey in SUPER_TRANSLATE_EVKEY.items():
+            if _super_down and f"code {tcode} (" in line:
+                log(f"Super+EV_KEY {tcode} -> F{fkey - 58}")
+                send_fkey(fkey)
+                return
         if f"code {F12_CODE} (" in line:
             f12_press()
             return
@@ -268,17 +302,7 @@ def parse_line(line, proc_map):
                 log(f"EV_KEY {code} -> {action}")
                 execute(action)
                 return
-    # Combo Super+Esc: alternar Multimedia <-> F1-F12
-    if "EV_KEY" in line:
-        global _super_down
-        if "code 125 (" in line or "code 126 (" in line:   # LEFTMETA/RIGHTMETA
-            _super_down = ("value 1" in line)
-        elif "code 1 (KEY_ESC)" in line and _super_down and "value 1" in line:
-            fnlock_toggle_action()
-            return
 
-
-FNLOCK_MODE_FILE = "/etc/zenbook-duo/fnlock-mode"
 
 def apply_saved_fnlock():
     """Reaplica el modo Fn guardado al (re)conectar el teclado."""
@@ -323,6 +347,12 @@ def main():
                                          text=True)
                     procs[node] = p
                     known_nodes.add(node)
+                    nf = f"/sys/class/input/{node.split('/')[-1].replace('event','input')}/name"
+                    try:
+                        if DEVICE_NAME in open(nf).read():
+                            ZENBOOK_NODES.add(node)
+                    except OSError:
+                        pass
                     log(f"Monitoring {node}")
                 except Exception as e:
                     log(f"No se pudo abrir {node}: {e}")
