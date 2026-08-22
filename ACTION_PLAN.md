@@ -89,3 +89,8 @@ Validaciones: bash -n ✓ · py_compile ✓ · shellcheck limpio en nuevos ✓
 - El "Super+F5 no hace nada" era correcto: en modo función NO se necesita Super; el navegador recibe Super+F5 (sin acción) además de F5
 - Bonus conservado: en modo multimedia, Super+posición inyecta la F-tecla vía uinput
 - Interruptor definitivo: triple-F12 (con lockout anti-deshacer)
+
+### Ronda 5 ago-2026 — ROOT CAUSE definitivo de hotkeys BT muertas
+- **Causa**: los números de nodo (/dev/input/eventN) se RECICLAN al reconectar el teclado; el evtest viejo quedaba sordo sobre la instancia muerta y el re-escaneo lo consideraba "ya monitoreado" (mismo path) → nunca re-enganchaba. Además evtest sin line-buffering retenía eventos en pipe de 4KB.
+- **Fix**: el mapper rastrea la IDENTIDAD física del dispositivo (ruta sysfs del input); si cambia bajo el mismo event node → mata el evtest viejo, lo re-engancha y reinicializa la fila. Todo con stdbuf -oL.
+- **Verificado en vivo por BT**: F5/F6/F9 instantáneos con feedback visual (brillo %, mic).
