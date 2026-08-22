@@ -393,6 +393,7 @@ cp "$REPO_DIR/config/udev/99-zenbook-duo-amp.rules" /etc/udev/rules.d/99-zenbook
 
 # USB power management rules (BT wake fix) - match by VID/PID
 cp "$REPO_DIR/config/udev/50-usb-power-management.rules" /etc/udev/rules.d/50-usb-power-management.rules
+cp "$REPO_DIR/config/udev/99-zenbook-keyboard-bt.rules" /etc/udev/rules.d/99-zenbook-keyboard-bt.rules
 
 udevadm control --reload-rules 2>/dev/null || true
 udevadm trigger --action=add --subsystem-match=usb 2>/dev/null || true
