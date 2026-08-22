@@ -375,7 +375,7 @@ def main():
             line = procs[node].stdout.readline()
             if not line:
                 continue   # proceso morirá; se detectará en próximo scan
-            parse_line(line, procs)
+            parse_line(line, node)
 
 
 if __name__ == "__main__":
