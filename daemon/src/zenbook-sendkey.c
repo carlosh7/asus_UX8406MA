@@ -46,7 +46,8 @@ int main(int argc, char **argv) {
 
     if (ioctl(fd, UI_DEV_SETUP, &us) < 0) die("UI_DEV_SETUP");
     if (ioctl(fd, UI_DEV_CREATE) < 0)    die("UI_DEV_CREATE");
-    usleep(120000);   /* dejar que X/Wayland registre el dispositivo */
+    /* retardo seguro para que Mutter/libinput registre el dispositivo */
+    usleep(500000);   /* dejar que X/Wayland registre el dispositivo */
 
     struct input_event ev;
     struct timeval tv;

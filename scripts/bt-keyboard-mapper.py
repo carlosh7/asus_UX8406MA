@@ -52,13 +52,7 @@ SUPER_TRANSLATE_ABS = {
 }
 SENDKEY_BIN = "/usr/local/bin/zenbook-sendkey"
 
-F12_CODE = 88
-F12_MAX_GAP = 1.0        # segundos máximos entre pulsaciones consecutivas
-F12_LOCKOUT = 1.5        # tras alternar, ignora F12 este tiempo (evita deshacer)
-f12_presses = []         # timestamps de la ráfaga actual
-f12_lockout_until = 0
 ZENBOOK_NODES = set()    # nodos event del teclado desacoplable
-FNLOCK_MODE_FILE = "/etc/zenbook-duo/fnlock-mode"
 
 BACKLIGHT = "/sys/class/backlight/intel_backlight"
 
@@ -125,35 +119,6 @@ def find_event_nodes():
         except OSError:
             continue
     return sorted(set(nodes))
-
-
-def fnlock_toggle_action():
-    global _super_down
-    _super_down = False   # consumir el combo
-    subprocess.Popen(["/usr/local/bin/fnlock-toggle.sh"])
-    log("  toggle F1-F12/Multimedia")
-
-
-def f12_press():
-    """Triple pulsación de F12 = alternar modo de la fila."""
-    global f12_presses, f12_lockout_until
-    now = time.time()
-    if now < f12_lockout_until:
-        return   # lockout: las pulsaciones sobrantes no deshacen el cambio
-    # Si la última pulsación es demasiado antigua, reiniciar ráfaga
-    if f12_presses and now - f12_presses[-1] > F12_MAX_GAP:
-        f12_presses = []
-    f12_presses.append(now)
-    log(f"F12 pulsación {len(f12_presses)}")
-    if len(f12_presses) >= 3:
-        gap_ok = (f12_presses[-1] - f12_presses[0]) <= (F12_MAX_GAP * 2)
-        f12_presses = []
-        if gap_ok:
-            fnlock_toggle_action()
-            f12_lockout_until = time.time() + F12_LOCKOUT
-            log(f"  lockout F12 hasta +{F12_LOCKOUT}s")
-        else:
-            log("  ráfaga demasiado lenta, ignorada")
 
 
 def br_step(direction):
@@ -250,15 +215,6 @@ def execute(action):
         status_osd()
 
 
-def current_fnlock_mode():
-    """0 = multimedia, 1 = función. Default 0."""
-    try:
-        m = open(FNLOCK_MODE_FILE).read().strip()
-        return m if m in ("0", "1") else "0"
-    except OSError:
-        return "0"
-
-
 def parse_line(line, node):
     global _super_down
     zenbook_node = node in ZENBOOK_NODES
@@ -281,11 +237,8 @@ def parse_line(line, node):
                 return
             if value in KEYCODE_MAP:
                 key = KEYCODE_MAP[value]
-                if current_fnlock_mode() == "1":
-                    log(f"ABS_MISC {value} ignorado (modo función)")
-                else:
-                    log(f"ABS_MISC {value} -> {key}")
-                    execute(key)
+                log(f"ABS_MISC {value} -> {key}")
+                execute(key)
         return
 
     # Fila de función: EV_KEY estándar en pulsación (solo teclado desacoplable)
@@ -295,28 +248,11 @@ def parse_line(line, node):
                 log(f"Super+EV_KEY {tcode} -> F{fkey - 58}")
                 send_fkey(fkey)
                 return
-        if f"code {F12_CODE} (" in line:
-            f12_press()
-            return
         for code, action in EVKEY_MAP.items():
             if f"code {code} (" in line:
                 log(f"EV_KEY {code} -> {action}")
                 execute(action)
                 return
-
-
-def apply_saved_fnlock():
-    """Reaplica el modo Fn guardado al (re)conectar el teclado."""
-    try:
-        mode = open(FNLOCK_MODE_FILE).read().strip()
-        if mode in ("0", "1"):
-            r = subprocess.run(["/usr/local/bin/fn-lock.py", mode],
-                               capture_output=True, text=True, timeout=10)
-            log(f"  fnlock-mode={mode} reaplicado ({r.stdout.strip() or r.stderr.strip()})")
-    except FileNotFoundError:
-        pass
-    except Exception as e:
-        log(f"  ERROR aplicando fnlock: {e}")
 
 
 def main():
@@ -326,7 +262,6 @@ def main():
     procs = {}   # Popen -> node
     last_scan = 0
     known_nodes = set()
-    apply_saved_fnlock()          # modo Fn guardado al arrancar el servicio
 
     while True:
         # Re-escaneo: cuando no hay procesos o venció el intervalo
@@ -335,11 +270,8 @@ def main():
         if not procs or (not alive_nodes and now - last_scan >= IDLE_RESCAN) \
            or (now - last_scan >= RESCAN_EVERY and len(procs) < 8):
             nodes = [n for n in find_event_nodes() if n not in alive_nodes]
-            new_nodes = [n for n in nodes if n not in known_nodes]
-            if known_nodes and new_nodes:
-                # Aparecieron nodos nuevos = teclado (re)conectado
-                log("Teclado conectado: reaplicando modo Fn guardado")
-                apply_saved_fnlock()
+            for n in nodes:
+                known_nodes.add(n)
             for node in nodes:
                 try:
                     p = subprocess.Popen(["evtest", node],
