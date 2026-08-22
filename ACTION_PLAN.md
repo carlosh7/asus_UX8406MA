@@ -83,3 +83,9 @@ Validaciones: bash -n ✓ · py_compile ✓ · shellcheck limpio en nuevos ✓
 - El brillo que el usuario notó al pulsar F5 venía del ALS/ajuste residual, no de la tecla
 - Mapper ahora IGNORA códigos vendor ABS_MISC (16/32/124/199) cuando fnlock-mode=1 → modo función = fila 100% limpia
 - Triple-F12 verificado funcionando (2 toggles detectados en journal)
+
+### Ronda 4 ago-2026 — verificación con captura evtest
+- **Hallazgo clave**: con fnlock-mode=1 el firmware emite las F-teclas REALES nativamente (F5→KEY_F5 code 63 capturado), con o sin modificadores
+- El "Super+F5 no hace nada" era correcto: en modo función NO se necesita Super; el navegador recibe Super+F5 (sin acción) además de F5
+- Bonus conservado: en modo multimedia, Super+posición inyecta la F-tecla vía uinput
+- Interruptor definitivo: triple-F12 (con lockout anti-deshacer)

@@ -263,9 +263,10 @@ def parse_line(line, node):
     global _super_down
     zenbook_node = node in ZENBOOK_NODES
 
-    # Tracking de Super (cualquier teclado)
+    # Tracking de Super (cualquier teclado). value 2 = auto-repetición al
+    # mantener: también cuenta como presionada (bug v1: repetición → False)
     if "EV_KEY" in line and ("code 125 (" in line or "code 126 (" in line):
-        _super_down = ("value 1" in line)
+        _super_down = ("value 0" not in line)
 
     # Teclas multimedia (USB/BT): eventos ABS_MISC del fabricante
     if zenbook_node and "ABS_MISC" in line and "value" in line:
