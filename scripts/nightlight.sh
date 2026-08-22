@@ -22,7 +22,17 @@ gnome_nightlight() {
         echo "No graphical user found" >&2
         return 1
     fi
-    sudo -u "$GRAPHICAL_USER" gsettings set org.gnome.settings-daemon.plugins.color night-light-enabled "$1" 2>/dev/null
+    # v2: con bus de sesión del usuario (antes escribía en un store fantasma
+    # sin DBUS_SESSION_BUS_ADDRESS y nunca aplicaba)
+    local uid=$(id -u "$GRAPHICAL_USER")
+    sudo -u "$GRAPHICAL_USER" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${uid}/bus" \
+        XDG_RUNTIME_DIR="/run/user/${uid}" \
+        gsettings set org.gnome.settings-daemon.plugins.color night-light-enabled "$1" 2>/dev/null
+    [ "$1" = "true" ] && sudo -u "$GRAPHICAL_USER" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${uid}/bus" \
+        XDG_RUNTIME_DIR="/run/user/${uid}" \
+        gsettings set org.gnome.settings-daemon.plugins.color night-light-temperature "${NIGHTLIGHT_TEMP:-3700}" 2>/dev/null
 }
 
 gnome_status() {
@@ -30,7 +40,11 @@ gnome_status() {
         echo "unknown"
         return
     fi
-    sudo -u "$GRAPHICAL_USER" gsettings get org.gnome.settings-daemon.plugins.color night-light-enabled 2>/dev/null
+    local uid=$(id -u "$GRAPHICAL_USER")
+    sudo -u "$GRAPHICAL_USER" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${uid}/bus" \
+        XDG_RUNTIME_DIR="/run/user/${uid}" \
+        gsettings get org.gnome.settings-daemon.plugins.color night-light-enabled 2>/dev/null
 }
 
 case "${1:-toggle}" in

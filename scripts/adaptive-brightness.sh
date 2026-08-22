@@ -25,6 +25,16 @@ LAST_ALS=0
 LAST_BRIGHTNESS=0
 PAUSED=0
 PAUSE_THRESHOLD=20000
+# v2: referencia FIJA durante la pausa (antes se deslizaba en cada ciclo y
+# una subida gradual de luz nunca acumulaba el umbral → brillo clavado abajo)
+PAUSE_ALS=0
+PAUSE_TS=0
+MAX_PAUSE_SEC=600          # reanudar automático tras 10 min aunque la luz no cambie mucho
+RESUME_THRESHOLD=20000
+
+# Config opcional: /etc/zenbook-duo/adaptive-brightness.conf
+[ -f /etc/zenbook-duo/adaptive-brightness.conf ] && \
+    . /etc/zenbook-duo/adaptive-brightness.conf
 
 log_msg() {
     echo "[$(date '+%H:%M:%S')] $1" >> "$LOG_FILE"
@@ -131,22 +141,27 @@ while true; do
         if [ "$PAUSED" -eq 0 ]; then
             log_msg "PAUSED (manual: $LAST_BRIGHTNESS -> $current_br, ALS stable)"
             PAUSED=1
+            PAUSE_ALS=$als
+            PAUSE_TS=$(date +%s)
         fi
-        LAST_ALS=$als
         LAST_BRIGHTNESS=$current_br
         sleep "$CHECK_INTERVAL"
         continue
     fi
     
-    # STEP 2: If paused, check if ALS changed significantly -> resume
+    # STEP 2: If paused, check resume conditions
     if [ "$PAUSED" -eq 1 ]; then
-        if [ "$als_diff" -ge "$PAUSE_THRESHOLD" ] 2>/dev/null; then
-            log_msg "RESUMED (ALS: $LAST_ALS -> $als)"
+        pause_ref_diff=$((als - PAUSE_ALS))
+        if [ "$pause_ref_diff" -lt 0 ]; then pause_ref_diff=$((pause_ref_diff * -1)); fi
+        now=$(date +%s)
+        elapsed=$((now - PAUSE_TS))
+        if [ "$pause_ref_diff" -ge "$RESUME_THRESHOLD" ] || [ "$elapsed" -ge "$MAX_PAUSE_SEC" ]; then
+            reason="ALS ${LAST_ALS}->${als}" ; [ "$pause_ref_diff" -ge "$RESUME_THRESHOLD" ] && reason="ΔALS=$pause_ref_diff desde pausa" 
+            log_msg "RESUMED (${reason}; ${elapsed}s en pausa)"
             PAUSED=0
-        else
-            # Still paused, don't change brightness
             LAST_ALS=$als
-            LAST_BRIGHTNESS=$current_br
+            LAST_BRIGHTNESS=$(get_current_brightness)
+        else
             sleep "$CHECK_INTERVAL"
             continue
         fi

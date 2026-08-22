@@ -1,0 +1,2 @@
+# ASUS Zenbook Duo Keyboard (BT hidraw) - group access
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0b05", ATTRS{idProduct}=="1b2d", MODE="0660", GROUP="input"

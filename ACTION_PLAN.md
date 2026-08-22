@@ -58,3 +58,17 @@ Detalle completo en `AUDIT_REPORT.md` §11. Resumen:
 ### P2 menor
 - Renombrar `test_hardware.sh` → `hardware-test.sh`
 - Quitar `sudo` interno del Makefile
+
+---
+
+## ✅ RONDA 2 ago-2026 — hotkeys BT, ALS, luz teclado, night light, fn-lock
+
+| Issue | Causa raíz | Fix | Estado |
+|---|---|---|---|
+| Hotkeys muertas por BT | mapper solo monitoreaba el PRIMER event node; ABS_MISC llega por otro nodo; sin re-escaneo en reconexiones | mapper v2: monitorea TODOS los nodos del teclado, multiplexa con select(), re-escanea cada 10s/2s (hotplug) | ✅ desplegado, 5 nodos monitoreados |
+| ALS baja brillo y nunca sube | durante PAUSED la referencia LAST_ALS se deslizaba cada ciclo → una subida gradual nunca acumulaba umbral de reanudación | referencia fija PAUSE_ALS al pausar + reanudación por Δ desde pausa o timeout MAX_PAUSE_SEC=600s; configurable en /etc/zenbook-duo/adaptive-brightness.conf | ✅ desplegado |
+| Luz teclado: tiempo de reposo | hardcodeado 30s | configurable vía /etc/zenbook-duo/kb-backlight.conf → aplicado 45s | ✅ |
+| Night light no activable | `sudo -u user gsettings` SIN bus de sesión → store fantasma | env DBUS_SESSION_BUS_ADDRESS/XDG_RUNTIME_DIR inyectados + temperatura 3700K | ✅ probado on/toggle/status |
+| F1-F12 vs multimedia por BT | fn-lock.py solo hablaba USB (pyusb) | v2: auto-detección USB/BT; BT via feature report hidraw (HIDIOCSFEATURE) + regla udev hidraw grupo input | ✅ probado ambas vías |
+
+Validaciones: bash -n ✓ · py_compile ✓ · shellcheck limpio en nuevos ✓

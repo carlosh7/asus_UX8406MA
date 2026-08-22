@@ -14,8 +14,13 @@ LOG_FILE="/var/log/zenbook-kb-backlight.log"
 
 CHECK_INTERVAL_ACTIVE=3     # Seconds between checks when backlight is ON
 CHECK_INTERVAL_IDLE=1       # Seconds between checks when backlight is OFF (fast wake-up)
-INACTIVITY_TIMEOUT=30000    # 30 seconds idle -> turn off backlight
+INACTIVITY_TIMEOUT=30000    # 30 seconds idle -> turn off backlight (ms)
 DEBOUNCE_SEC=10             # Minimum seconds between level changes (when ON)
+
+# Config opcional del usuario (sobreescribe lo anterior):
+#   /etc/zenbook-duo/kb-backlight.conf
+#   Ejemplo: INACTIVITY_TIMEOUT=60000  (60s antes de apagar la luz)
+[ -f /etc/zenbook-duo/kb-backlight.conf ] && . /etc/zenbook-duo/kb-backlight.conf
 
 # Light thresholds (raw ALS values, scale=0.001)
 LIGHT_BRIGHT=2500     # >2500 raw -> level 0 (off, bright enough)
