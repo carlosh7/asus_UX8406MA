@@ -226,8 +226,17 @@ def execute(action):
         status_osd()
 
 
+def current_fnlock_mode():
+    """0 = multimedia, 1 = función. Default 0."""
+    try:
+        m = open(FNLOCK_MODE_FILE).read().strip()
+        return m if m in ("0", "1") else "0"
+    except OSError:
+        return "0"
+
+
 def parse_line(line, proc_map):
-    # Teclas multimedia (USB): eventos ABS_MISC del fabricante
+    # Teclas multimedia (USB/BT): eventos ABS_MISC del fabricante
     if "ABS_MISC" in line and "value" in line:
         try:
             value = int(line.split("value")[1].strip())
@@ -235,6 +244,11 @@ def parse_line(line, proc_map):
             return
         if value > 0 and value in KEYCODE_MAP:
             key = KEYCODE_MAP[value]
+            # En modo función la fila es F1-F12 reales: ignorar códigos vendor
+            # residuales (p.ej. F5 sigue emitiendo su código de brillo)
+            if current_fnlock_mode() == "1":
+                log(f"ABS_MISC {value} ignorado (modo función)")
+                return
             log(f"ABS_MISC {value} -> {key}")
             execute(key)
         return

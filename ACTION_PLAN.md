@@ -77,3 +77,9 @@ Validaciones: bash -n ✓ · py_compile ✓ · shellcheck limpio en nuevos ✓
 - Mic F9: el mute SÍ aplicaba pero era invisible → ahora notifica "Micrófono: silenciado/activo"
 - Brillo F5/F6: notificación OSD con % también por BT
 - Nuevo: **<Super>Esc** alterna Multimedia ↔ F1-F12 con notificación y persistencia automática (custom3)
+
+### Ronda 3c ago-2026 — comportamiento verificado del hardware
+- Captura evtest en modo función: F5 emite KEY_F5 (63) real, SIN ABS_MISC → fn-lock del firmware SÍ funciona
+- El brillo que el usuario notó al pulsar F5 venía del ALS/ajuste residual, no de la tecla
+- Mapper ahora IGNORA códigos vendor ABS_MISC (16/32/124/199) cuando fnlock-mode=1 → modo función = fila 100% limpia
+- Triple-F12 verificado funcionando (2 toggles detectados en journal)
