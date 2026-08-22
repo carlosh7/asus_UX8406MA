@@ -16,8 +16,12 @@ import time
 import select
 
 DEVICE_NAME = "ASUS Zenbook Duo Keyboard"
+BUILTIN_KEYBOARD_NAME = "AT Translated Set 2 keyboard"   # teclado integrado laptop
 RESCAN_EVERY = 10          # segundos entre re-escaneos si hay nodos vivos
 IDLE_RESCAN = 2            # segundos si no hay nodos vivos
+
+# Estado global para combo Super+Esc (alternar personalidad de la fila)
+_super_down = False
 
 # ABS_MISC value -> función (teclas multimedia por enlace USB)
 KEYCODE_MAP = {
@@ -85,11 +89,13 @@ def run_as_session_user(cmd):
 
 
 def find_event_nodes():
-    """Todos los event nodes cuyo input name sea el teclado ASUS."""
+    """Event nodes del teclado desacoplable + teclado integrado (para combos)."""
     nodes = []
+    wanted = (DEVICE_NAME, BUILTIN_KEYBOARD_NAME)
     for name_file in glob.glob("/sys/class/input/input*/name"):
         try:
-            if DEVICE_NAME not in open(name_file).read():
+            name = open(name_file).read()
+            if not any(w in name for w in wanted):
                 continue
             inp_dir = os.path.dirname(name_file)
             for ev in glob.glob(f"{inp_dir}/event*"):
@@ -99,6 +105,13 @@ def find_event_nodes():
         except OSError:
             continue
     return sorted(set(nodes))
+
+
+def fnlock_toggle_action():
+    global _super_down
+    _super_down = False   # consumir el combo
+    subprocess.Popen(["/usr/local/bin/fnlock-toggle.sh"])
+    log("  Super+Esc -> toggle F1-F12/Multimedia")
 
 
 def br_step(direction):
@@ -209,6 +222,14 @@ def parse_line(line, proc_map):
                 log(f"EV_KEY {code} -> {action}")
                 execute(action)
                 return
+    # Combo Super+Esc: alternar Multimedia <-> F1-F12
+    if "EV_KEY" in line:
+        global _super_down
+        if "code 125 (" in line or "code 126 (" in line:   # LEFTMETA/RIGHTMETA
+            _super_down = ("value 1" in line)
+        elif "code 1 (KEY_ESC)" in line and _super_down and "value 1" in line:
+            fnlock_toggle_action()
+            return
 
 
 FNLOCK_MODE_FILE = "/etc/zenbook-duo/fnlock-mode"
