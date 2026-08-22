@@ -9,7 +9,9 @@ Restart=on-failure
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus
+# Sin Environment: el mapper resuelve el bus de sesión dinámicamente
+# (loginctl) y hace drop de privilegios a la sesión gráfica cuando necesita
+# D-Bus. %U en servicio de sistema expande a 0 → bus de root inexistente.
 
 [Install]
 WantedBy=graphical.target

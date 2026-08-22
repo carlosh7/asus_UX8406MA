@@ -1,0 +1,7 @@
+=== SNAPSHOT PRE-APAGADO 2026-08-22 09:12 ===
+unidades habilitadas: 9
+unidades activas: 11
+scripts instalados: 9
+reglas udev zenbook: 4
+kb-backlight.conf: INACTIVITY_TIMEOUT=45000
+powertop: disabled

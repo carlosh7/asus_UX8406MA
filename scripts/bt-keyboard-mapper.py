@@ -53,6 +53,21 @@ SUPER_TRANSLATE_ABS = {
 SENDKEY_BIN = "/usr/local/bin/zenbook-sendkey"
 
 ZENBOOK_NODES = set()    # nodos event del teclado desacoplable
+FNLOCK_INIT_FILE = "/etc/zenbook-duo/fnlock-mode"   # inicialización de fila (0=multimedia)
+
+def init_row_on_connect():
+    """Envía el reporte fn-lock para despertar la fila superior.
+    Sin esta inicialización, tras apagado completo las teclas F no emiten nada."""
+    try:
+        mode = open(FNLOCK_INIT_FILE).read().strip()
+        if mode not in ("0", "1"):
+            mode = "0"
+    except OSError:
+        mode = "0"
+    r = subprocess.run(["/usr/local/bin/fn-lock.py", mode],
+                       capture_output=True, text=True, timeout=15)
+    out = (r.stdout.strip() + " " + r.stderr.strip()).strip()
+    log(f"  fila={'F1-F12' if mode=='1' else 'multimedia'} rc={r.returncode} :: {out[:120]}")
 
 BACKLIGHT = "/sys/class/backlight/intel_backlight"
 
@@ -262,19 +277,30 @@ def main():
     procs = {}   # Popen -> node
     last_scan = 0
     known_nodes = set()
+    last_row_init = 0.0
 
     while True:
-        # Re-escaneo: cuando no hay procesos o venció el intervalo
+        # Reinicialización periódica de la fila (el teclado la pierde al dormir)
         now = time.time()
+        if now - last_row_init >= 60:
+            init_row_on_connect()
+            last_row_init = now
+
+        # Re-escaneo: cuando no hay procesos o venció el intervalo
         alive_nodes = {n for n, p in procs.items() if p.poll() is None}
         if not procs or (not alive_nodes and now - last_scan >= IDLE_RESCAN) \
            or (now - last_scan >= RESCAN_EVERY and len(procs) < 8):
             nodes = [n for n in find_event_nodes() if n not in alive_nodes]
+            # Nodos nuevos = teclado (re)conectado → inicializar fila superior
+            brand_new = [n for n in nodes if n not in known_nodes]
             for n in nodes:
                 known_nodes.add(n)
+            if brand_new:
+                log("Teclado conectado: inicializando fila superior")
+                init_row_on_connect()
             for node in nodes:
                 try:
-                    p = subprocess.Popen(["evtest", node],
+                    p = subprocess.Popen(["stdbuf", "-oL", "evtest", node],
                                          stdout=subprocess.PIPE,
                                          stderr=subprocess.DEVNULL,
                                          text=True)
