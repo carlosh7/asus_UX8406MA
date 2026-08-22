@@ -36,8 +36,11 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Detect logged-in user (not root)
+# INSTALL_USER puede predefinirse vía entorno para instalaciones automatizadas
 if [ -n "${SUDO_USER:-}" ]; then
     INSTALL_USER="$SUDO_USER"
+elif [ -n "${INSTALL_USER:-}" ]; then
+    :   # predefinido por el operador
 else
     INSTALL_USER=$(logname 2>/dev/null || echo "")
 fi
@@ -508,23 +511,11 @@ if command -v tlp &>/dev/null; then
     fi
 fi
 
-# PowerTOP (auto-tune on boot)
+# PowerTOP auto-tune: DESACTIVADO por decisión de diseño — compite con TLP
+# (auditoría 2026-08: un solo gestor de energía). El paquete queda instalado
+# para uso manual si se necesita.
 if command -v powertop &>/dev/null; then
-    cat > /etc/systemd/system/powertop.service << 'EOF'
-[Unit]
-Description=PowerTOP auto-tune
-After=multi-user.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/sbin/powertop --auto-tune
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    systemctl enable powertop 2>/dev/null || true
-    echo "  PowerTOP auto-tune configured"
+    echo "  PowerTOP presente (sin servicio automático; TLP gestiona energía)"
 fi
 
 # Auto-cpufreq (if snap is available)
