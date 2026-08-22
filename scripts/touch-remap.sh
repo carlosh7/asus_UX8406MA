@@ -9,8 +9,8 @@
 # nunca llegaban al dconf del usuario porque el daemon los ejecutaba como root.
 # ============================================================================
 
-TOP_TOUCH_VIDPID="04f3:425a"   # ELAN9009 — pantalla superior
-BOT_TOUCH_VIDPID="04f3:425b"   # ELAN9008 — pantalla inferior (bajo teclado)
+TOP_TOUCH_VIDPID="04f3:425b"   # ELAN9008 — pantalla superior (verificado en hardware real)
+BOT_TOUCH_VIDPID="04f3:425a"   # ELAN9009 — pantalla inferior (bajo teclado; el nº de modelo NO indica posición física)
 TOP_OUT="eDP-1"
 BOT_OUT="eDP-2"
 
