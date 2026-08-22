@@ -55,6 +55,21 @@ def find_session_user():
                 return line.split()[0]
     except Exception:
         pass
+    # Fallback robusto: loginctl (Wayland no siempre aparece en `who`)
+    try:
+        out = subprocess.run(["loginctl", "list-sessions", "--no-legend"],
+                             capture_output=True, text=True).stdout
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) < 3:
+                continue
+            sid, uid = parts[0], parts[1]
+            stype = subprocess.run(["loginctl", "show-session", sid, "-p", "Type", "--value"],
+                                   capture_output=True, text=True).stdout.strip()
+            if stype in ("wayland", "x11"):
+                return parts[2]
+    except Exception:
+        pass
     return ""
 
 
@@ -184,12 +199,30 @@ def parse_line(line, proc_map):
                 return
 
 
+FNLOCK_MODE_FILE = "/etc/zenbook-duo/fnlock-mode"
+
+def apply_saved_fnlock():
+    """Reaplica el modo Fn guardado al (re)conectar el teclado."""
+    try:
+        mode = open(FNLOCK_MODE_FILE).read().strip()
+        if mode in ("0", "1"):
+            r = subprocess.run(["/usr/local/bin/fn-lock.py", mode],
+                               capture_output=True, text=True, timeout=10)
+            log(f"  fnlock-mode={mode} reaplicado ({r.stdout.strip() or r.stderr.strip()})")
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        log(f"  ERROR aplicando fnlock: {e}")
+
+
 def main():
     if os.geteuid() != 0 and not os.access("/dev/input/event0", os.R_OK):
         log("AVISO: sin acceso a /dev/input (¿grupo input?)")
 
     procs = {}   # Popen -> node
     last_scan = 0
+    known_nodes = set()
+    apply_saved_fnlock()          # modo Fn guardado al arrancar el servicio
 
     while True:
         # Re-escaneo: cuando no hay procesos o venció el intervalo
@@ -198,6 +231,11 @@ def main():
         if not procs or (not alive_nodes and now - last_scan >= IDLE_RESCAN) \
            or (now - last_scan >= RESCAN_EVERY and len(procs) < 8):
             nodes = [n for n in find_event_nodes() if n not in alive_nodes]
+            new_nodes = [n for n in nodes if n not in known_nodes]
+            if known_nodes and new_nodes:
+                # Aparecieron nodos nuevos = teclado (re)conectado
+                log("Teclado conectado: reaplicando modo Fn guardado")
+                apply_saved_fnlock()
             for node in nodes:
                 try:
                     p = subprocess.Popen(["evtest", node],
@@ -205,6 +243,7 @@ def main():
                                          stderr=subprocess.DEVNULL,
                                          text=True)
                     procs[node] = p
+                    known_nodes.add(node)
                     log(f"Monitoring {node}")
                 except Exception as e:
                     log(f"No se pudo abrir {node}: {e}")

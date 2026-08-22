@@ -89,6 +89,14 @@ def main():
     mode_str = "Function keys (F1-F12)" if mode == 1 else "Multimedia keys"
     print(f"Keyboard mode set to: {mode_str} ({via})")
 
+    # Persistir: el mapper reaplica este modo en cada reconexión del teclado
+    try:
+        os.makedirs("/etc/zenbook-duo", exist_ok=True)
+        with open("/etc/zenbook-duo/fnlock-mode", "w") as f:
+            f.write(str(mode))
+    except OSError:
+        pass
+
 
 def last_err_hint():
     for hdir in sorted(glob.glob(BT_PREFIX + "*")):
