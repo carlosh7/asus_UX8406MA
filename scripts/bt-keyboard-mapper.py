@@ -127,7 +127,19 @@ def br_step(direction):
 def mic_mute_toggle():
     # wpctl debe correr como el usuario dueño del servidor PipeWire
     run_as_session_user("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle")
-    log("  mic toggle enviado")
+    # Feedback visual: consulta el estado resultante y notifica
+    time.sleep(0.3)
+    r = subprocess.run(
+        ["sudo", "-u", find_session_user() or "jim",
+         "wpctl", "get-volume", "@DEFAULT_AUDIO_SOURCE@"],
+        capture_output=True, text=True,
+        env={**os.environ,
+             "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus",
+             "XDG_RUNTIME_DIR": "/run/user/1000"})
+    state = "silenciado" if "MUTED" in r.stdout else "activo"
+    run_as_session_user(
+        f"notify-send -t 1200 -a 'Zenbook Duo' 'Micrófono: {state}'")
+    log(f"  mic {state}")
 
 
 def display_toggle():

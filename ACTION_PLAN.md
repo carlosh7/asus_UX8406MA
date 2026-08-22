@@ -72,3 +72,8 @@ Detalle completo en `AUDIT_REPORT.md` §11. Resumen:
 | F1-F12 vs multimedia por BT | fn-lock.py solo hablaba USB (pyusb) | v2: auto-detección USB/BT; BT via feature report hidraw (HIDIOCSFEATURE) + regla udev hidraw grupo input | ✅ probado ambas vías |
 
 Validaciones: bash -n ✓ · py_compile ✓ · shellcheck limpio en nuevos ✓
+
+### Ronda 3b ago-2026
+- Mic F9: el mute SÍ aplicaba pero era invisible → ahora notifica "Micrófono: silenciado/activo"
+- Brillo F5/F6: notificación OSD con % también por BT
+- Nuevo: **<Super>Esc** alterna Multimedia ↔ F1-F12 con notificación y persistencia automática (custom3)

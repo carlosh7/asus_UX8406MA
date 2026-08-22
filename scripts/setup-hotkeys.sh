@@ -48,9 +48,10 @@ set_custom_binding() {
 set_custom_binding "custom0" "Teclado-Luz" "/usr/local/bin/kb-light-cycle.sh" "F4"
 set_custom_binding "custom1" "Duo-Toggle" "/usr/local/bin/duo toggle" "F7"
 set_custom_binding "custom2" "Bluetooth-Toggle" "/usr/local/bin/toggle-bluetooth.sh" "F10"
+set_custom_binding "custom3" "FnLock-Toggle" "/usr/local/bin/fnlock-toggle.sh" "<Super>Escape"
 
 # Register the custom bindings
-gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$BASE_PATH/custom0/', '$BASE_PATH/custom1/', '$BASE_PATH/custom2/']"
+gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$BASE_PATH/custom0/', '$BASE_PATH/custom1/', '$BASE_PATH/custom2/', '$BASE_PATH/custom3/']"
 
 echo "Done! Test your F1-F12 keys now."
 echo ""
