@@ -139,4 +139,4 @@ No hay `/home/jim` ni usuarios hardcodeados en código de ejecución ✓ (solo U
 
 **Validaciones post-Fase 0**: bash -n todos ✓ · shellcheck archivos nuevos limpio · systemd-analyze verify ✓ · gitleaks 0 fugas · 11/11 unidades activas · 0 failed
 
-**Pendiente**: test físico del usuario del fix táctil (desacoplar teclado → tocar abajo)
+**B8 VERIFICADO POR USUARIO ✅**: primer intento resultó en inversión completa → evidencia de que el cableado físico es 425b=panel SUPERIOR, 425a=panel INFERIOR (contrario a los comentarios del health-check original). Mapeos intercambiados y re-testeado: touch inferior responde abajo, superior arriba. Fix definitivo en commit 8f237da.
