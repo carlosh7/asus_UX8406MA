@@ -19,7 +19,7 @@ DEVICE_NAME = "ASUS Zenbook Duo Keyboard"
 RESCAN_EVERY = 10          # segundos entre re-escaneos si hay nodos vivos
 IDLE_RESCAN = 2            # segundos si no hay nodos vivos
 
-# ABS_MISC value -> función
+# ABS_MISC value -> función (teclas multimedia por enlace USB)
 KEYCODE_MAP = {
     199: "kbd_light",
     16:  "br_down",
@@ -27,11 +27,46 @@ KEYCODE_MAP = {
     124: "mic_mute",
 }
 
+# EV_KEY code -> función (fila F7/F10-F12; llegan como teclas estándar)
+# Solo se procesa en value=1 (pulsación)
+EVKEY_MAP = {
+    65: "display_toggle",   # KEY_F7  : alternar pantallas
+    68: "bt_toggle",        # KEY_F10 : bluetooth
+    87: "nightlight",       # KEY_F11 : luz nocturna
+    88: "status_osd",       # KEY_F12 : estado en pantalla
+}
+
 BACKLIGHT = "/sys/class/backlight/intel_backlight"
 
 
 def log(msg):
     print(msg, flush=True)
+
+
+def find_session_user():
+    """Usuario con sesión gráfica activa (para wpctl/notify-send)."""
+    u = os.environ.get("SUDO_USER", "")
+    if u:
+        return u
+    try:
+        out = subprocess.run(["who"], capture_output=True, text=True).stdout
+        for line in out.splitlines():
+            if "(:" in line or "seat0" in line:
+                return line.split()[0]
+    except Exception:
+        pass
+    return ""
+
+
+def run_as_session_user(cmd):
+    user = find_session_user()
+    if not user:
+        log("  ERROR: sin sesión gráfica para ejecutar acción de usuario")
+        return
+    uid = os.popen(f"id -u {user}").read().strip()
+    env = f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus XDG_RUNTIME_DIR=/run/user/{uid}"
+    subprocess.run(f"sudo -u {user} env {env} {cmd}", shell=True,
+                   capture_output=True, text=True)
 
 
 def find_event_nodes():
@@ -52,7 +87,7 @@ def find_event_nodes():
 
 
 def br_step(direction):
-    """Paso de brillo de pantalla vía sysfs (sudoers: tee NOPASSWD)."""
+    """Paso de brillo de pantalla vía sysfs (sudoers: tee NOPASSWD) + feedback OSD."""
     try:
         cur = int(open(f"{BACKLIGHT}/brightness").read())
         mx = int(open(f"{BACKLIGHT}/max_brightness").read())
@@ -62,7 +97,12 @@ def br_step(direction):
             ["sudo", "-n", "tee", f"{BACKLIGHT}/brightness"],
             input=f"{target}\n", capture_output=True, text=True)
         if r.returncode == 0:
-            log(f"  brillo -> {target}/{mx}")
+            pct = round(target * 100 / mx)
+            log(f"  brillo -> {target}/{mx} ({pct}%)")
+            # Feedback visual (el OSD nativo de GNOME no aparece al escribir sysfs)
+            run_as_session_user(
+                f"notify-send -h int:value:{pct} -t 800 "
+                f"-a 'Zenbook Duo' -i display-brightness 'Brillo {pct}%'")
         else:
             log(f"  ERROR brillo: {r.stderr.strip()}")
     except Exception as e:
@@ -70,9 +110,37 @@ def br_step(direction):
 
 
 def mic_mute_toggle():
-    r = subprocess.run(["wpctl", "set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle"],
+    # wpctl debe correr como el usuario dueño del servidor PipeWire
+    run_as_session_user("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle")
+    log("  mic toggle enviado")
+
+
+def display_toggle():
+    subprocess.Popen(["/usr/local/bin/duo", "toggle"])
+    log("  duo toggle")
+
+
+def bt_toggle():
+    r = subprocess.run(["/usr/local/bin/toggle-bluetooth.sh"],
                        capture_output=True, text=True)
-    log("  mic toggle " + "ok" if r.returncode == 0 else f"  ERROR mic: {r.stderr.strip()}")
+    log(f"  bluetooth: {r.stdout.strip() or r.stderr.strip()}")
+
+
+def nightlight():
+    run_as_session_user("/usr/local/bin/nightlight.sh toggle")
+    log("  night light toggle")
+
+
+def status_osd():
+    try:
+        st = subprocess.run(["/usr/local/bin/duo", "status"],
+                            capture_output=True, text=True, timeout=10)
+        summary = " | ".join(st.stdout.splitlines()[:2]) or "Zenbook Duo"
+    except Exception:
+        summary = "Zenbook Duo"
+    run_as_session_user(
+        "notify-send -t 1500 -a 'Zenbook Duo' 'Estado' \"" + summary.replace('"', "'") + "\"")
+    log("  status OSD")
 
 
 def execute(action):
@@ -85,19 +153,35 @@ def execute(action):
         br_step(+1)
     elif action == "mic_mute":
         mic_mute_toggle()
+    elif action == "display_toggle":
+        display_toggle()
+    elif action == "bt_toggle":
+        bt_toggle()
+    elif action == "nightlight":
+        nightlight()
+    elif action == "status_osd":
+        status_osd()
 
 
 def parse_line(line, proc_map):
-    if "ABS_MISC" not in line or "value" not in line:
+    # Teclas multimedia (USB): eventos ABS_MISC del fabricante
+    if "ABS_MISC" in line and "value" in line:
+        try:
+            value = int(line.split("value")[1].strip())
+        except ValueError:
+            return
+        if value > 0 and value in KEYCODE_MAP:
+            key = KEYCODE_MAP[value]
+            log(f"ABS_MISC {value} -> {key}")
+            execute(key)
         return
-    try:
-        value = int(line.split("value")[1].strip())
-    except ValueError:
-        return
-    if value > 0 and value in KEYCODE_MAP:
-        key = KEYCODE_MAP[value]
-        log(f"ABS_MISC {value} -> {key}")
-        execute(key)
+    # Fila de función: EV_KEY estándar (F7/F10/F11/F12) en pulsación
+    if "EV_KEY" in line and "value 1" in line:
+        for code, action in EVKEY_MAP.items():
+            if f"code {code} (" in line:
+                log(f"EV_KEY {code} -> {action}")
+                execute(action)
+                return
 
 
 def main():
