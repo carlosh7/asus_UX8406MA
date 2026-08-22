@@ -42,8 +42,10 @@ EVKEY_MAP = {
 # alterna Multimedia <-> F1-F12 con notificación y persistencia
 
 F12_CODE = 88
-F12_MAX_GAP = 0.6        # segundos máximos entre pulsaciones consecutivas
+F12_MAX_GAP = 0.8        # segundos máximos entre pulsaciones consecutivas
+F12_LOCKOUT = 1.5        # tras alternar, ignora F12 este tiempo (evita deshacer)
 f12_presses = []         # timestamps de la ráfaga actual
+f12_lockout_until = 0
 
 BACKLIGHT = "/sys/class/backlight/intel_backlight"
 
@@ -121,8 +123,10 @@ def fnlock_toggle_action():
 
 def f12_press():
     """Triple pulsación de F12 = alternar modo de la fila."""
-    global f12_presses
+    global f12_presses, f12_lockout_until
     now = time.time()
+    if now < f12_lockout_until:
+        return   # lockout: las pulsaciones sobrantes no deshacen el cambio
     # Si la última pulsación es demasiado antigua, reiniciar ráfaga
     if f12_presses and now - f12_presses[-1] > F12_MAX_GAP:
         f12_presses = []
@@ -133,6 +137,8 @@ def f12_press():
         f12_presses = []
         if gap_ok:
             fnlock_toggle_action()
+            f12_lockout_until = time.time() + F12_LOCKOUT
+            log(f"  lockout F12 hasta +{F12_LOCKOUT}s")
         else:
             log("  ráfaga demasiado lenta, ignorada")
 
