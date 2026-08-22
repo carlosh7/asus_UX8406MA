@@ -118,8 +118,8 @@ def run_as_session_user(cmd):
 
 
 def find_event_nodes():
-    """Event nodes del teclado desacoplable + teclado integrado (para combos)."""
-    nodes = []
+    """[(event_dev, ruta_sysfs_input)] teclado desacoplable + integrado."""
+    out = []
     wanted = (DEVICE_NAME, BUILTIN_KEYBOARD_NAME)
     for name_file in glob.glob("/sys/class/input/input*/name"):
         try:
@@ -130,10 +130,10 @@ def find_event_nodes():
             for ev in glob.glob(f"{inp_dir}/event*"):
                 dev = f"/dev/input/{os.path.basename(ev)}"
                 if os.access(dev, os.R_OK):
-                    nodes.append(dev)
+                    out.append((dev, inp_dir))
         except OSError:
             continue
-    return sorted(set(nodes))
+    return sorted(set(out))
 
 
 def br_step(direction):
@@ -274,66 +274,89 @@ def main():
     if os.geteuid() != 0 and not os.access("/dev/input/event0", os.R_OK):
         log("AVISO: sin acceso a /dev/input (¿grupo input?)")
 
-    procs = {}   # Popen -> node
-    last_scan = 0
-    known_nodes = set()
+    procs = {}          # node -> {"proc":Popen, "input":sysfs_dir}
+    known_inputs = set()
+    last_scan = 0.0
     last_row_init = 0.0
 
     while True:
-        # Reinicialización periódica de la fila (el teclado la pierde al dormir)
+        # La fila superior pierde su inicialización cuando el teclado duerme:
+        # reenviar el reporte periódicamente la mantiene siempre operativa.
         now = time.time()
         if now - last_row_init >= 60:
             init_row_on_connect()
             last_row_init = now
 
-        # Re-escaneo: cuando no hay procesos o venció el intervalo
-        alive_nodes = {n for n, p in procs.items() if p.poll() is None}
-        if not procs or (not alive_nodes and now - last_scan >= IDLE_RESCAN) \
-           or (now - last_scan >= RESCAN_EVERY and len(procs) < 8):
-            nodes = [n for n in find_event_nodes() if n not in alive_nodes]
-            # Nodos nuevos = teclado (re)conectado → inicializar fila superior
-            brand_new = [n for n in nodes if n not in known_nodes]
-            for n in nodes:
-                known_nodes.add(n)
-            if brand_new:
-                log("Teclado conectado: inicializando fila superior")
-                init_row_on_connect()
-            for node in nodes:
+        alive_inputs = {info["input"] for info in procs.values()
+                        if info["proc"].poll() is None}
+        if (not procs) or (not alive_inputs and now - last_scan >= IDLE_RESCAN) \
+           or (now - last_scan >= RESCAN_EVERY):
+            current = {d: i for d, i in find_event_nodes()}
+
+            # Reconexión: misma ruta de evento con distinta identidad física,
+            # o evtest muerto sobre un nodo que sigue existiendo
+            reconnected = []
+            for d in list(procs):
+                cur_inp = current.get(d)
+                dead = procs[d]["proc"].poll() is not None
+                if d not in current or dead:
+                    try:
+                        procs[d]["proc"].terminate()
+                    except Exception:
+                        pass
+                    procs.pop(d, None)
+                elif cur_inp and procs[d]["input"] != cur_inp:
+                    reconnected.append(d)
+                    try:
+                        procs[d]["proc"].terminate()
+                    except Exception:
+                        pass
+                    del procs[d]
+
+            # Lanzar evtest en nodos nuevos o re-enganchados
+            fresh = False
+            for dev, inp in current.items():
+                if dev in procs:
+                    continue
                 try:
-                    p = subprocess.Popen(["stdbuf", "-oL", "evtest", node],
+                    p = subprocess.Popen(["stdbuf", "-oL", "evtest", dev],
                                          stdout=subprocess.PIPE,
                                          stderr=subprocess.DEVNULL,
                                          text=True)
-                    procs[node] = p
-                    known_nodes.add(node)
-                    nf = f"/sys/class/input/{node.split('/')[-1].replace('event','input')}/name"
-                    try:
-                        if DEVICE_NAME in open(nf).read():
-                            ZENBOOK_NODES.add(node)
-                    except OSError:
-                        pass
-                    log(f"Monitoring {node}")
+                    name_file = os.path.join(inp, "name")
+                    is_zb = DEVICE_NAME in open(name_file).read()
                 except Exception as e:
-                    log(f"No se pudo abrir {node}: {e}")
+                    log(f"No se pudo abrir {dev}: {e}")
+                    continue
+                procs[dev] = {"proc": p, "input": inp}
+                known_inputs.add(inp)
+                if is_zb:
+                    ZENBOOK_NODES.add(dev)
+                log(f"Monitoring {dev}")
+                fresh = True
+
+            if fresh or reconnected:
+                log("Teclado conectado/reconectado: inicializando fila")
+                init_row_on_connect()
+
             last_scan = now
-            # Limpieza de procesos muertos
-            procs = {n: p for n, p in procs.items() if p.poll() is None}
 
         if not procs:
             time.sleep(IDLE_RESCAN)
             continue
 
-        # Multiplexar stdout de todos los evtest vivos
-        fds = {p.stdout.fileno(): n for n, p in procs.items() if p.poll() is None}
+        fds = {info["proc"].stdout.fileno(): node
+               for node, info in procs.items()
+               if info["proc"].poll() is None and info["proc"].stdout}
         if not fds:
             time.sleep(0.5)
             continue
         readable, _, _ = select.select(list(fds.keys()), [], [], 1.0)
         for fd in readable:
             node = fds[fd]
-            line = procs[node].stdout.readline()
+            line = procs[node]["proc"].stdout.readline()
             if not line:
-                continue   # proceso morirá; se detectará en próximo scan
+                continue
             parse_line(line, node)
 
 
