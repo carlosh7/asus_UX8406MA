@@ -42,7 +42,7 @@ EVKEY_MAP = {
 # alterna Multimedia <-> F1-F12 con notificación y persistencia
 
 F12_CODE = 88
-F12_MAX_GAP = 0.8        # segundos máximos entre pulsaciones consecutivas
+F12_MAX_GAP = 1.0        # segundos máximos entre pulsaciones consecutivas
 F12_LOCKOUT = 1.5        # tras alternar, ignora F12 este tiempo (evita deshacer)
 f12_presses = []         # timestamps de la ráfaga actual
 f12_lockout_until = 0
