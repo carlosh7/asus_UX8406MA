@@ -56,9 +56,12 @@ notify_gui() {
 }
 
 # --- 1. Servicios activos y habilitados -------------------------------------
+# NOTA: zenbook-suspend-backlight queda FUERA — es oneshot de resume
+# (WantedBy=suspend.target): "inactive" entre reanudaciones es su estado
+# normal y el doctor lo "reparaba" en cada pasada (falso positivo, ronda 7).
 MANAGED_UNITS="zenbook-duo brightness-sync zenbook-light-monitor zenbook-thermal \
 zenbook-adaptive-brightness zenbook-config battery-limit zenbook-nightlight \
-mic-boost zenbook-bt-keyboard zenbook-suspend-backlight"
+mic-boost zenbook-bt-keyboard"
 
 for u in $MANAGED_UNITS; do
     en=$(systemctl is-enabled "$u.service" 2>/dev/null || true)

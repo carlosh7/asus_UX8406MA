@@ -51,7 +51,8 @@ echo ""
 echo "📦 SERVICIOS"
 echo "────────────"
 # (ronda 6) auto-display se omite: deshabilitado por diseño (duplica al daemon C)
-for svc in zenbook-duo zenbook-thermal zenbook-light-monitor zenbook-adaptive-brightness brightness-sync zenbook-config battery-limit zenbook-nightlight mic-boost zenbook-bt-keyboard zenbook-doctor; do
+# zenbook-doctor es oneshot: se valida por su TIMER, no por el servicio
+for svc in zenbook-duo zenbook-thermal zenbook-light-monitor zenbook-adaptive-brightness brightness-sync zenbook-config battery-limit zenbook-nightlight mic-boost zenbook-bt-keyboard; do
     status=$(systemctl is-active ${svc}.service 2>/dev/null)
     enabled=$(systemctl is-enabled ${svc}.service 2>/dev/null)
     if [ "$status" = "active" ] && [ "$enabled" = "enabled" ]; then
@@ -64,6 +65,16 @@ for svc in zenbook-duo zenbook-thermal zenbook-light-monitor zenbook-adaptive-br
         ERRORS=$((ERRORS + 1))
     fi
 done
+
+# Zenbook Doctor (oneshot): válido por su timer activo+habilitado
+doc_t_status=$(systemctl is-active zenbook-doctor.timer 2>/dev/null)
+doc_t_enabled=$(systemctl is-enabled zenbook-doctor.timer 2>/dev/null)
+if [ "$doc_t_status" = "active" ] && [ "$doc_t_enabled" = "enabled" ]; then
+    echo "  ✅ zenbook-doctor.timer (active + enabled)"
+else
+    echo "  ❌ zenbook-doctor.timer ($doc_t_status/$doc_t_enabled)"
+    ERRORS=$((ERRORS + 1))
+fi
 echo ""
 
 # 2. ALS Sensor
