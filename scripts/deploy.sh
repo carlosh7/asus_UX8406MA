@@ -79,7 +79,7 @@ echo "== [6/7] Permisos de configs del sistema =="
 chmod 644 /etc/systemd/system/zenbook*.service /etc/systemd/system/{brightness-sync,battery-limit,mic-boost}.service 2>/dev/null || true
 for f in /etc/logrotate.d/zenbook-duo.conf /etc/modprobe.d/xe-gpu-optimize.conf \
          /etc/sysctl.d/99-performance.conf /etc/tlp.d/01-zenbook.conf; do
-    [ -f "$f" ] && chmod 644 "$f"
+    if [ -f "$f" ]; then chmod 644 "$f"; fi
 done
 
 echo "== [7/7] Verificación rápida =="
@@ -90,13 +90,13 @@ if [ "$DIAG" -eq 1 ]; then
     OUT=/tmp/zenbook-diag.txt
     {
         echo "=== xe params ==="
-        for p in /sys/module/xe/parameters/*; do echo "$(basename "$p")=$(cat "$p" 2>/dev/null)"; done | grep -E 'fbc|psr|sagv|ips|dc=|panel_replay'
-        echo "=== tlp-stat -s ==="; tlp-stat -s 2>/dev/null | head -25
+        for p in /sys/module/xe/parameters/*; do echo "$(basename "$p")=$(cat "$p" 2>/dev/null)"; done | grep -E 'fbc|psr|sagv|ips|dc=|panel_replay' || true
+        echo "=== tlp-stat -s ==="; tlp-stat -s 2>/dev/null | head -25 || true
         echo "=== nvme smart ==="; nvme smart-log /dev/nvme0 2>/dev/null | grep -E 'critical_warning|percentage_used|media_errors|unsafe_shutdowns' || echo "nvme-cli no instalado"
-        echo "=== sudoers ==="; visudo -cf /etc/sudoers.d/zenbook-duo 2>&1
+        echo "=== sudoers ==="; visudo -cf /etc/sudoers.d/zenbook-duo 2>&1 || true
         echo "=== backlights ==="; for bl in /sys/class/backlight/*/; do echo "$bl $(cat "$bl/brightness")/$(cat "$bl/max_brightness")"; done
-    } > "$OUT" 2>&1
-    chmod 644 "$OUT"
+    } > "$OUT" 2>&1 || true
+    chmod 644 "$OUT" 2>/dev/null || true
     echo "Diagnóstico en $OUT"
 fi
 
