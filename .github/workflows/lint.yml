@@ -38,6 +38,8 @@ jobs:
       - name: Validate install/uninstall references (no hardcoded user)
         run: |
           set -e
-          for f in install/*.sh scripts/*.sh systemd/*.service config/udev/*.rules; do
+          # (M5, ronda 6) incluir *.py: el mapper tenía hardcodes que el grep
+          # no veía porque solo escaneaba .sh/.service/.rules
+          for f in install/*.sh scripts/*.sh scripts/*.py systemd/*.service config/udev/*.rules; do
             grep -E 'carlosh|jim|run/user/1000' "$f" && { echo "HARDCODED REF IN: $f"; exit 1; } || true
           done

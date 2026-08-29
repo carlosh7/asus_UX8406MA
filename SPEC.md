@@ -33,10 +33,10 @@
 | F6 | Brightness + | ✅ works | F6 |
 | F7 | Swap Screens | ✅ works | F7 |
 | F9 | Mic Mute | ✅ works | F9 |
-| F10 | Bluetooth | ❌ | F10 |
-| F11 | Emojis | ❌ | F11 |
+| F10 | Bluetooth | ✅ works (mapper v2: EVKEY 68 → toggle-bluetooth) | F10 |
+| F11 | Night light | ✅ reasignada a luz nocturna (mapper v2: EVKEY 87) | F11 |
 | F12 | ASUS SW | ❌ | F12 |
-| Fn | - | ❌ not detected | - |
+| Fn | - | ❌ not detected (ver rondas 3c/4: en modo función el firmware emite F-teclas reales) | - |
 
 ## 3. Architecture
 

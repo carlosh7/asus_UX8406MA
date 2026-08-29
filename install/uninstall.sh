@@ -40,7 +40,10 @@ fi
 echo ""
 echo "[1/5] Stopping and disabling services..."
 
-ALL_SERVICES="zenbook-duo.service brightness-sync.service zenbook-auto-display.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-config.service battery-limit.service zenbook-nightlight.service zenbook-suspend-backlight.service mic-boost.service zenbook-bt-keyboard.service"
+# Doctor timer primero (puede reiniciar servicios mientras se desinstala)
+systemctl disable --now zenbook-doctor.timer 2>/dev/null && echo "  Disabled: zenbook-doctor.timer" || true
+
+ALL_SERVICES="zenbook-duo.service brightness-sync.service zenbook-auto-display.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-config.service battery-limit.service zenbook-nightlight.service zenbook-suspend-backlight.service mic-boost.service zenbook-bt-keyboard.service zenbook-doctor.service"
 for svc in $ALL_SERVICES; do
     systemctl stop "$svc" 2>/dev/null && echo "  Stopped: $svc" || true
     systemctl disable "$svc" 2>/dev/null && echo "  Disabled: $svc" || true
@@ -64,8 +67,8 @@ fi
 echo ""
 echo "[2/5] Removing installed files..."
 
-# Remove binaries (all installed by install.sh)
-for script in duo bk.py fn-lock.py wayland-display-mgr.py auto-display.sh light-monitor.sh start.sh toggle-bluetooth.sh kb-light-cycle.sh setup-hotkeys.sh mic-boost.sh setup-displays.sh kb-backlight-mgr.sh kb-backlight-unified.sh adaptive-brightness.sh thermal-monitor.sh audio-diagnose.sh audio-calibrate.sh wifi-diagnose.sh test_hardware.sh webcam-diagnose.sh webcam-optimize.sh bt-keyboard-mapper.py zenbook-config.sh suspend-backlight.sh nightlight.sh ssd-health.sh fn-lock.sh system-health.sh disk-monitor.sh weekly-maintenance.sh zzz-keyboard-light oled-protect.sh webcam-privacy.sh firmware-check.sh zenbook-health-check.sh zenbook-boot-test.sh touch-remap.sh setup-touch-wayland.sh zenbook-duo amp-enable.sh; do
+# Remove binaries (los que instala install.sh; sin nombres legacy que nunca existieron)
+for script in duo bk.py fn-lock.py fnlock-toggle.sh zenbook-doctor.sh wayland-display-mgr.py auto-display.sh start.sh toggle-bluetooth.sh kb-light-cycle.sh setup-hotkeys.sh mic-boost.sh setup-displays.sh kb-backlight-unified.sh adaptive-brightness.sh thermal-monitor.sh audio-diagnose.sh audio-calibrate.sh wifi-diagnose.sh test_hardware.sh webcam-diagnose.sh webcam-optimize.sh bt-keyboard-mapper.py zenbook-config.sh suspend-backlight.sh nightlight.sh ssd-health.sh fn-lock.sh system-health.sh disk-monitor.sh weekly-maintenance.sh zzz-keyboard-light oled-protect.sh webcam-privacy.sh firmware-check.sh zenbook-health-check.sh zenbook-boot-test.sh touch-remap.sh setup-touch-wayland.sh setup-touch-x11.sh zenbook-duo zenbook-sendkey amp-enable.sh; do
     rm -f "$BIN_DIR/$script" 2>/dev/null || true
 done
 echo "  CLI scripts removed from $BIN_DIR"
@@ -84,9 +87,10 @@ echo "[3/5] Removing configuration..."
 rm -rf /etc/zenbook-duo/
 echo "  Removed /etc/zenbook-duo/"
 
-# Remove udev rules
+# Remove udev rules (incluye la regla hidraw BT que faltaba — M8)
 rm -f /etc/udev/rules.d/50-usb-power-management.rules
 rm -f /etc/udev/rules.d/99-zenbook-keyboard.rules
+rm -f /etc/udev/rules.d/99-zenbook-keyboard-bt.rules
 rm -f /etc/udev/rules.d/99-zenbook-npu.rules
 rm -f /etc/udev/rules.d/99-zenbook-duo-amp.rules
 udevadm control --reload-rules 2>/dev/null || true
@@ -143,8 +147,14 @@ if [ -n "$USER_HOME" ]; then
     # Ask about dconf touch mapping
     read -p "  Remove dconf touch mapping? (y/N): " remove_dconf
     if [[ "$remove_dconf" =~ ^[Yy]$ ]]; then
-        sudo -u "$REMOVE_USER" gsettings reset org.gnome.desktop.peripherals.touchscreens 04f3:425b 2>/dev/null || true
-        sudo -u "$REMOVE_USER" gsettings reset org.gnome.desktop.peripherals.touchscreens 04f3:425a 2>/dev/null || true
+        # (M8) dconf reset directo: gsettings reset con schema relocatable y
+        # clave separada era sintaxis inválida; y sin bus de sesión no aplicaba
+        uid=$(id -u "$REMOVE_USER")
+        for vp in 04f3:425a 04f3:425b; do
+            sudo -u "$REMOVE_USER" env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+                XDG_RUNTIME_DIR="/run/user/$uid" \
+                dconf reset "/org/gnome/desktop/peripherals/touchscreens/$vp/output" 2>/dev/null || true
+        done
         echo "  Touch mapping reset"
     else
         echo "  Kept touch mapping"

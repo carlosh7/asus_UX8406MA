@@ -17,8 +17,9 @@ fi
 # Cycle level
 NEW_LEVEL=$(( (LEVEL + 1) % 4 ))
 
-# Set level (runs bk.py with passwordless sudo)
-sudo /usr/local/bin/bk.py "$NEW_LEVEL" 2>/dev/null
+# Set level (bk.py escribe al teclado vía grupo input: sin sudo — M6/H3, ronda 6;
+# el sudo anterior generaba 39 fallos de autenticación/7d bajo el keybinding)
+/usr/local/bin/bk.py "$NEW_LEVEL" 2>/dev/null
 
 # Save state
 echo "$NEW_LEVEL" > "$STATE_FILE" 2>/dev/null

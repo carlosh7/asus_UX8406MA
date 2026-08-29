@@ -14,6 +14,7 @@ import glob
 import os
 import time
 import select
+import pwd
 
 DEVICE_NAME = "ASUS Zenbook Duo Keyboard"
 BUILTIN_KEYBOARD_NAME = "AT Translated Set 2 keyboard"   # teclado integrado laptop
@@ -106,14 +107,26 @@ def find_session_user():
     return ""
 
 
+def _session_env(user):
+    """Entorno D-Bus del usuario de sesión (uid vía pwd, sin hardcodes)."""
+    uid = pwd.getpwnam(user).pw_uid
+    return {
+        **os.environ,
+        "DBUS_SESSION_BUS_ADDRESS": f"unix:path=/run/user/{uid}/bus",
+        "XDG_RUNTIME_DIR": f"/run/user/{uid}",
+    }
+
+
 def run_as_session_user(cmd):
     user = find_session_user()
     if not user:
         log("  ERROR: sin sesión gráfica para ejecutar acción de usuario")
         return
-    uid = os.popen(f"id -u {user}").read().strip()
-    env = f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus XDG_RUNTIME_DIR=/run/user/{uid}"
-    subprocess.run(f"sudo -u {user} env {env} {cmd}", shell=True,
+    env = _session_env(user)
+    subprocess.run(["sudo", "-u", user, "env",
+                    f"DBUS_SESSION_BUS_ADDRESS={env['DBUS_SESSION_BUS_ADDRESS']}",
+                    f"XDG_RUNTIME_DIR={env['XDG_RUNTIME_DIR']}",
+                    "bash", "-c", cmd],
                    capture_output=True, text=True)
 
 
@@ -161,16 +174,16 @@ def br_step(direction):
 
 def mic_mute_toggle():
     # wpctl debe correr como el usuario dueño del servidor PipeWire
+    user = find_session_user()
+    if not user:
+        log("  ERROR: sin sesión gráfica para el micrófono")
+        return
     run_as_session_user("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle")
     # Feedback visual: consulta el estado resultante y notifica
     time.sleep(0.3)
     r = subprocess.run(
-        ["sudo", "-u", find_session_user() or "jim",
-         "wpctl", "get-volume", "@DEFAULT_AUDIO_SOURCE@"],
-        capture_output=True, text=True,
-        env={**os.environ,
-             "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus",
-             "XDG_RUNTIME_DIR": "/run/user/1000"})
+        ["sudo", "-u", user, "wpctl", "get-volume", "@DEFAULT_AUDIO_SOURCE@"],
+        capture_output=True, text=True, env=_session_env(user))
     state = "silenciado" if "MUTED" in r.stdout else "activo"
     run_as_session_user(
         f"notify-send -t 1200 -a 'Zenbook Duo' 'Micrófono: {state}'")

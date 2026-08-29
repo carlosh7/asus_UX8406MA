@@ -368,7 +368,9 @@ for m in monitors:
     connector = m[0][0]
     current_mode = None
     for mode_info in m[1]:
-        if "is-current" in mode_info[5] and mode_info[5]["is-current"]:
+        # Mutter ≥42: las props del modo están en el índice 6 (igual que touch-remap)
+        props = mode_info[6] if len(mode_info) >= 7 else mode_info[5]
+        if "is-current" in props and props["is-current"]:
             current_mode = mode_info[0]
             break
     if not current_mode:
@@ -459,7 +461,9 @@ for m in monitors:
     connector = m[0][0]
     current_mode = None
     for mode_info in m[1]:
-        if "is-current" in mode_info[5] and mode_info[5]["is-current"]:
+        # Mutter ≥42: las props del modo están en el índice 6 (igual que touch-remap)
+        props = mode_info[6] if len(mode_info) >= 7 else mode_info[5]
+        if "is-current" in props and props["is-current"]:
             current_mode = mode_info[0]
             break
     if not current_mode:
@@ -518,7 +522,9 @@ for m in monitors:
     connector = m[0][0]
     current_mode = None
     for mode_info in m[1]:
-        if "is-current" in mode_info[5] and mode_info[5]["is-current"]:
+        # Mutter ≥42: las props del modo están en el índice 6 (igual que touch-remap)
+        props = mode_info[6] if len(mode_info) >= 7 else mode_info[5]
+        if "is-current" in props and props["is-current"]:
             current_mode = mode_info[0]
             break
     if not current_mode:
@@ -706,13 +712,19 @@ case "$1" in
     # --- Battery ---
     bat-limit)
         threshold="${2:-80}"
-        echo "$threshold" | suenv tee /sys/class/power_supply/BAT0/charge_control_end_threshold 2>/dev/null
+        # Itera todas las BAT* (B2: BAT0 hardcodeado falla en equipos con BAT1)
+        for bat in /sys/class/power_supply/BAT*/charge_control_end_threshold; do
+            [ -f "$bat" ] || continue
+            echo "$threshold" | suenv tee "$bat" 2>/dev/null
+        done
         echo "Battery limit set to $threshold%"
         ;;
 
     # --- Keyboard ---
     set-kb-backlight)
-        suenv "$(dirname "$0")/bk.py" "$2"
+        # bk.py vía grupo input: sin sudo (M6/H3 — el sudo provocaba fallos de
+        # autenticación bajo keybinding); como root también funciona directo
+        "$(dirname "$0")/bk.py" "$2"
         ;;
 
     # --- System Info ---

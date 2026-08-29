@@ -13,7 +13,9 @@ def set_config(mode):
         connector = m[0][0]
         current_mode = None
         for mode_info in m[1]:
-            if 'is-current' in mode_info[5] and mode_info[5]['is-current']:
+            # Mutter ≥42: props del modo en índice 6 (M3, ronda 6)
+            props = mode_info[6] if len(mode_info) >= 7 else mode_info[5]
+            if 'is-current' in props and props['is-current']:
                 current_mode = mode_info[0]
                 break
         if not current_mode: current_mode = m[1][0][0]

@@ -50,7 +50,8 @@ echo ""
 # 1. Services
 echo "📦 SERVICIOS"
 echo "────────────"
-for svc in zenbook-duo zenbook-thermal zenbook-light-monitor zenbook-adaptive-brightness brightness-sync zenbook-auto-display zenbook-config battery-limit zenbook-nightlight mic-boost zenbook-bt-keyboard; do
+# (ronda 6) auto-display se omite: deshabilitado por diseño (duplica al daemon C)
+for svc in zenbook-duo zenbook-thermal zenbook-light-monitor zenbook-adaptive-brightness brightness-sync zenbook-config battery-limit zenbook-nightlight mic-boost zenbook-bt-keyboard zenbook-doctor; do
     status=$(systemctl is-active ${svc}.service 2>/dev/null)
     enabled=$(systemctl is-enabled ${svc}.service 2>/dev/null)
     if [ "$status" = "active" ] && [ "$enabled" = "enabled" ]; then
@@ -217,8 +218,10 @@ BOT_DEV=""
 for d in /sys/class/input/input*/name; do
     name=$(cat "$d" 2>/dev/null)
     case "$name" in
-        "ELAN9009:00 04F3:425A") TOP_DEV="$name";;
-        "ELAN9008:00 04F3:425B") BOT_DEV="$name";;
+        # Cableado real verificado en hardware (B8, commit 8f237da):
+        # 425b (ELAN9008) = panel SUPERIOR, 425a (ELAN9009) = panel inferior
+        "ELAN9008:00 04F3:425B") TOP_DEV="$name";;
+        "ELAN9009:00 04F3:425A") BOT_DEV="$name";;
     esac
 done
 if [ -n "$TOP_DEV" ] && [ -n "$BOT_DEV" ]; then

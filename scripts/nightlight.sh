@@ -53,6 +53,11 @@ case "${1:-toggle}" in
             gnome_nightlight true
             echo "Night light ON"
         else
+            # redshift no lo instala el proyecto (ronda 6): fallo visible en
+            # vez de command-not-found silencioso
+            if ! command -v redshift >/dev/null 2>&1; then
+                echo "Modo X11 requiere redshift (sudo apt install redshift)"; exit 1
+            fi
             if ! pgrep -x redshift >/dev/null; then
                 redshift -m randr -O 3500 &
                 echo "Night light ON (3500K)"

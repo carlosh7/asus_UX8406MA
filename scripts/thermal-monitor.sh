@@ -124,10 +124,12 @@ get_target_profile() {
 
     case "$current" in
         quiet)
-            if [ "$temp" -ge "$BAL_TEMP" ]; then
-                echo "balanced"
-            elif [ "$temp" -ge "$PERF_TEMP" ]; then
+            # PERF primero: con BAL antes, quiet→performance (82>68) era
+            # inalcanzable y el enfriado máximo se retrasaba 30s (ronda 6)
+            if [ "$temp" -ge "$PERF_TEMP" ]; then
                 echo "performance"
+            elif [ "$temp" -ge "$BAL_TEMP" ]; then
+                echo "balanced"
             else
                 echo "quiet"
             fi
