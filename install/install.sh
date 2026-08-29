@@ -285,7 +285,8 @@ CORE_SCRIPTS="duo bk.py fn-lock.py wayland-display-mgr.py"
 for script in $CORE_SCRIPTS; do
     if [ -f "$REPO_DIR/scripts/$script" ]; then
         cp "$REPO_DIR/scripts/$script" "$BIN_DIR/"
-        chmod +x "$BIN_DIR/$script"
+        # 0755 (no group-writable): los servicios ejecutan estos binarios como root
+        chmod 755 "$BIN_DIR/$script"
     fi
 done
 
@@ -294,7 +295,7 @@ SERVICE_SCRIPTS="auto-display.sh start.sh kb-light-cycle.sh toggle-bluetooth.sh 
 for script in $SERVICE_SCRIPTS; do
     if [ -f "$REPO_DIR/scripts/$script" ]; then
         cp "$REPO_DIR/scripts/$script" "$BIN_DIR/"
-        chmod +x "$BIN_DIR/$script"
+        chmod 755 "$BIN_DIR/$script"
     fi
 done
 
@@ -390,10 +391,13 @@ EOF
 
 # Udev rule for CS35L41 right amplifier
 cp "$REPO_DIR/config/udev/99-zenbook-duo-amp.rules" /etc/udev/rules.d/99-zenbook-duo-amp.rules
+chmod 644 /etc/udev/rules.d/99-zenbook-duo-amp.rules
 
 # USB power management rules (BT wake fix) - match by VID/PID
 cp "$REPO_DIR/config/udev/50-usb-power-management.rules" /etc/udev/rules.d/50-usb-power-management.rules
+chmod 644 /etc/udev/rules.d/50-usb-power-management.rules
 cp "$REPO_DIR/config/udev/99-zenbook-keyboard-bt.rules" /etc/udev/rules.d/99-zenbook-keyboard-bt.rules
+chmod 644 /etc/udev/rules.d/99-zenbook-keyboard-bt.rules
 
 udevadm control --reload-rules 2>/dev/null || true
 udevadm trigger --action=add --subsystem-match=usb 2>/dev/null || true
@@ -429,6 +433,9 @@ fi
 
 # Install systemd services
 cp "$REPO_DIR/systemd/"*.service /etc/systemd/system/
+# Normalizar permisos de configs del sistema (instalado desde un clone de
+# usuario quedan 0664 → grupo-escribibles bajo root: riesgo + logrotate falla)
+chmod 644 /etc/systemd/system/zenbook*.service /etc/systemd/system/{brightness-sync,battery-limit,mic-boost}.service 2>/dev/null || true
 
 # Set the run-as user on services that need the graphical session
 # (no hardcoded username in the repo; injected at install time)
@@ -485,6 +492,7 @@ echo "[10/10] Applying system configuration..."
 # Sysctl performance tuning
 if [ -f "$REPO_DIR/config/sysctl/99-performance.conf" ]; then
     cp "$REPO_DIR/config/sysctl/99-performance.conf" /etc/sysctl.d/
+    chmod 644 /etc/sysctl.d/99-performance.conf
     sysctl --system 2>/dev/null || true
     echo "  Sysctl performance tuning applied"
 fi
@@ -492,12 +500,14 @@ fi
 # GPU power optimization (xe module parameters)
 if [ -f "$REPO_DIR/config/modprobe/xe-gpu-optimize.conf" ]; then
     cp "$REPO_DIR/config/modprobe/xe-gpu-optimize.conf" /etc/modprobe.d/
+    chmod 644 /etc/modprobe.d/xe-gpu-optimize.conf
     echo "  GPU power optimization configured"
 fi
 
 # Logrotate configuration
 if [ -f "$REPO_DIR/config/logrotate/zenbook-duo.conf" ]; then
-    cp "$REPO_DIR/config/logrotate/zenbook-duo.conf" /etc/logrotate.d/
+    # logrotate rechaza configs escritas por grupo/otros (H1, ronda 6c)
+    install -m 644 "$REPO_DIR/config/logrotate/zenbook-duo.conf" /etc/logrotate.d/zenbook-duo.conf
     echo "  Logrotate configuration installed"
 fi
 
@@ -506,6 +516,7 @@ if command -v tlp &>/dev/null; then
     mkdir -p /etc/tlp.d/
     if [ -f "$REPO_DIR/config/tlp/01-zenbook.conf" ]; then
         cp "$REPO_DIR/config/tlp/01-zenbook.conf" /etc/tlp.d/
+        chmod 644 /etc/tlp.d/01-zenbook.conf
         systemctl enable tlp 2>/dev/null || true
         systemctl start tlp 2>/dev/null || true
         echo "  TLP power management configured"
