@@ -40,6 +40,15 @@ void signal_handler(int sig) {
     running = 0;
 }
 
+/* exec_cmd() lanza hijos con waitpid(WNOHANG) y sigue: sin este handler los
+   hijos terminados quedan como zombies del servicio (2 confirmados en host) */
+void sigchld_handler(int sig) {
+    (void)sig;
+    int saved = errno;
+    while (waitpid(-1, NULL, WNOHANG) > 0) {}
+    errno = saved;
+}
+
 /* Log to stderr (captured by systemd journal) */
 void log_msg(const char *fmt, ...) {
     va_list args;
@@ -76,7 +85,7 @@ int keyboard_attached_usb() {
         if (!fv) continue;
         
         char vendor[16] = {0};
-        fgets(vendor, sizeof(vendor), fv);
+        if (!fgets(vendor, sizeof(vendor), fv)) { fclose(fv); continue; }
         fclose(fv);
         
         /* Remove newline */
@@ -88,7 +97,7 @@ int keyboard_attached_usb() {
         if (!fp) continue;
         
         char product[16] = {0};
-        fgets(product, sizeof(product), fp);
+        if (!fgets(product, sizeof(product), fp)) { fclose(fp); continue; }
         fclose(fp);
         
         product[strcspn(product, "\n")] = 0;
@@ -162,13 +171,9 @@ void sync_brightness(const Config *cfg) {
     }
 }
 
-void toggle_bluetooth(int enable) {
-    if (enable) {
-        exec_cmd("rfkill", "unblock");
-    } else {
-        exec_cmd("rfkill", "block");
-    }
-}
+/* toggle_bluetooth() eliminada (ronda 6): era código muerto y con bug latente
+   — `rfkill block` sin tipo falla, y con bloqueo global habría apagado el WiFi.
+   El toggle de bluetooth lo hace scripts/toggle-bluetooth.sh vía hotkey F10. */
 
 void load_config(Config *cfg) {
     memset(cfg, 0, sizeof(Config));
@@ -181,7 +186,7 @@ void load_config(Config *cfg) {
     strcpy(cfg->brightness_bottom, "/sys/class/backlight/card1-eDP-2-backlight/brightness");
 
     /* Detect the DRM card exposing eDP panels (card0 on older Ubuntu, card1+ newer) */
-    char detected_bottom[256] = {0};
+    char detected_bottom[512] = {0};
     const char *bpath = "/sys/class/backlight";
     DIR *bdir = opendir(bpath);
     if (bdir) {
@@ -204,17 +209,17 @@ void load_config(Config *cfg) {
         bdir = opendir(bpath);
         if (bdir) {
             struct dirent *be;
-            char typebuf[64];
+            char typebuf[512];
             while ((be = readdir(bdir)) != NULL) {
                 if (be->d_name[0] == '.') continue;
                 snprintf(typebuf, sizeof(typebuf), "%s/%s/type", bpath, be->d_name);
                 FILE *ft = fopen(typebuf, "r");
                 if (!ft) continue;
                 char t[32] = {0};
-                fgets(t, sizeof(t), ft);
+                if (!fgets(t, sizeof(t), ft)) { fclose(ft); continue; }
                 fclose(ft);
                 if (strncmp(t, "raw", 3) != 0) continue;
-                char cand[256];
+                char cand[512];
                 snprintf(cand, sizeof(cand), "%s/%s/brightness", bpath, be->d_name);
                 if (strcmp(cand, cfg->brightness_bottom) != 0) {
                     strcpy(cfg->brightness_main, cand);
@@ -280,6 +285,7 @@ int main(int argc, char *argv[]) {
     if (strcmp(argv[1], "daemon") == 0) {
         signal(SIGINT, signal_handler);
         signal(SIGTERM, signal_handler);
+        signal(SIGCHLD, sigchld_handler);
         
         log_msg("Zenbook Duo Daemon started");
         log_msg("Settings: auto_display=%d, auto_brightness=%d, auto_bluetooth=%d",
@@ -336,7 +342,7 @@ int main(int argc, char *argv[]) {
                 struct dirent *pe;
                 while ((pe = readdir(pdir)) != NULL) {
                     if (strncmp(pe->d_name, "BAT", 3) != 0) continue;
-                    char path[256];
+                    char path[512];
                     snprintf(path, sizeof(path),
                              "/sys/class/power_supply/%s/charge_control_end_threshold", pe->d_name);
                     if (sysfs_write(path, val) == 0) applied++;
