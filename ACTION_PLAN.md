@@ -171,6 +171,38 @@ Detalle completo en `AUDIT_REPORT.md` §13. **Brillo v3 desplegado, confirmado p
 - **Validación**: `scripts/test-kb-backlight.sh` (nuevo) — 6/6 PASS (idle apaga, actividad enciende, dbus muerto degrada con AVISO visible y se auto-repara al volver). bash -n ✓ shellcheck ✓ systemd-analyze ✓.
 - **Pendiente**: despliegue al host (el agente no puede elevar desde esta sesión; pkexec rechazado por no_new_privs). Comando en el resumen al usuario. Tras desplegar: verificar en log "Starting v5 … Idle OK" y que la luz se apague a los 45s de inactividad.
 
+---
+
+## 🏁 Ronda 7 (2026-08-28 noche) — backlog ejecutado + capa de auto-reparación
+
+**Commits `17df257` `da2ab45` `b05787e` `e3bbfe9` `4fc463c`:** todos los hallazgos P0/P1/P2 de las rondas 6/6c quedaron resueltos en el repo (ver detalle en cada commit). Adiciones estructurales:
+
+### zenbook-doctor — auto-validación / monitoreo / auto-reparación
+- `zenbook-doctor.timer` (15 min + al boot) ejecuta `zenbook-doctor.sh` (root):
+  reinicia servicios habilitados caídos, re-habilita deshabilitados, corrige
+  permisos 0644 de configs (clase H1), re-aplica límite de batería del conf,
+  re-aplica mapeo táctil y hotkeys si desaparecen del dconf del usuario,
+  recrea fnlock-mode, y se auto-re-habilita si su timer se apaga.
+- Registra en journal + `/var/log/zenbook-doctor.log` + OSD al usuario.
+- `zenbook-health-check.sh` integrado al doctor en su lista de servicios.
+
+### deploy.sh — un solo comando repo→host
+- `sudo ./scripts/deploy.sh` despliega scripts, compila+instala el daemon,
+  instala unidades (reinyectando User=), habilita doctor, reinicia solo lo
+  que estaba activo y corre el health-check. `--diag` vuelca lo que exigía
+  root (xe params, tlp-stat, SMART NVMe, visudo) a /tmp/zenbook-diag.txt.
+
+### Validación de la ronda
+- bash -n ✓ · shellcheck (error/warning) ✓ · py_compile ✓ · systemd-analyze ✓
+- daemon compila con **0 warnings** · grep anti-hardcode del CI limpio (incluye .py)
+- tests: adaptive 13/13 ×3 (ahora determinista con polling), kb-backlight 6/6
+
+### Pendiente de ejecución en el host (requiere una ventana de sudo del usuario)
+1. `sudo ./scripts/deploy.sh --diag` — despliega TODO (incluye kb v5+mic-boost de 6d).
+2. `sudo chown -R jim:jim /home/jim/.config/autostart` (M2 en el host vivo).
+3. `sudo apt install smartmontools` (H9) y revisar /tmp/zenbook-diag.txt.
+4. Confirmar con el usuario si el auto-cpufreq removal + TLP re-aplica EPP (o `sudo tlp start`).
+
 ### P2
 - H6 decidir autoridad sysctl (TLP vs repo); H7 monitorear flicker DRM pipe A; H8 monitorear errores HOG BT.
 
