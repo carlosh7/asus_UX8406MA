@@ -198,10 +198,13 @@ Detalle completo en `AUDIT_REPORT.md` §13. **Brillo v3 desplegado, confirmado p
 - tests: adaptive 13/13 ×3 (ahora determinista con polling), kb-backlight 6/6
 
 ### Pendiente de ejecución en el host (requiere una ventana de sudo del usuario)
-1. `sudo ./scripts/deploy.sh --diag` — despliega TODO (incluye kb v5+mic-boost de 6d).
-2. `sudo chown -R jim:jim /home/jim/.config/autostart` (M2 en el host vivo).
-3. `sudo apt install smartmontools` (H9) y revisar /tmp/zenbook-diag.txt.
-4. Confirmar con el usuario si el auto-cpufreq removal + TLP re-aplica EPP (o `sudo tlp start`).
+1. ~~`sudo ./scripts/deploy.sh --diag`~~ ✅ **EJECUTADO (23:49)** — 40 scripts, daemon nuevo, doctor activo, v5 con self-check `Idle OK`. Resultados de --diag en AUDIT_REPORT §13.4 (xe todas las optimizaciones activas, SSD 97% vida, sudoers OK, sync brillo verificado).
+2. ~~chown autostart~~ ✅ · 3. ~~smartmontools~~ ✅ · 4. ~~tlp start~~ ✅ (EPP=default en AC es normal: governor performance lo hace irrelevante).
+
+### 🔁 Único pendiente operativo
+- Re-desplegar los 2 fixes de falsos positivos (`aeab137`) — un `sudo cp` de doctor+health-check; comando dado al usuario.
+- Vigilancia normal (sin acción): errores DRM pipe A si apareciera parpadeo; errores HOG BT (mapper se auto-repara).
+- Fase 1 (arquitectura, opcional a largo plazo): daemon v3 event-driven, user units + polkit, config.toml central, empaquetado .deb.
 
 ### P2
 - H6 decidir autoridad sysctl (TLP vs repo); H7 monitorear flicker DRM pipe A; H8 monitorear errores HOG BT.

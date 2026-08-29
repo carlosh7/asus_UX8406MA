@@ -234,6 +234,24 @@ Sube por hotkeys implementadas (rondas 2-5) y validación integral en vivo verde
 - **0 unidades fallidas**, 0 segfaults en 7d, disco 57% usado, TLP enabled (los errores "not enabled" son del momento de instalación, ago-22 09:00).
 - Governor performance en AC = correcto según TLP; perfil ACPI dinámico funcionando.
 
-### 13.4 Pendiente de medición (requiere el diálogo pkexec que no se completó)
+### 13.4 Mediciones obtenidas (deploy.sh --diag, 2026-08-28 23:49)
 
-Valores reales de `/sys/module/xe/parameters/` (FBC/PSR — leer como root; como jim los archivos son 0400), `tlp-stat -s` completo, SMART del NVMe (requiere instalar `smartmontools` o `nvme-cli`), `visudo -cf` del sudoers. Comando listo en ACTION_PLAN Ronda 6c.
+| Medición | Resultado |
+|----------|-----------|
+| **xe params** | `enable_fbc=1, enable_psr=1, enable_psr2_sel_fetch=Y, enable_sagv=Y, enable_ips=Y, enable_dc=-1, enable_panel_replay=-1` — **todas las optimizaciones GPU activas** (el conf de modprobe sí aplica) |
+| **NVMe SMART** | `critical_warning=0, percentage_used=3% (97% vida), media_errors=0`, unsafe_shutdowns=57 (contador informativo) — **SSD sano** |
+| **sudoers** | `visudo -cf`: parsed OK |
+| **EPP=default en AC** | **No es bug**: con governor=performance (TLP on-AC) intel_pstate ignora el EPP; solo es relevante en powersave/batería. Sin PPD ni auto-cpufreq: TLP + thermal-monitor coherentes |
+| **Backlights** | `intel_backlight 51/400` y `card1-eDP-2 51/400` — **sync de brillo verificado en vivo en modo dual** |
+| **Doctor 1ª pasada** | Activa, reparó `suspend-backlight` (falso positivo corregido en `aeab137`) y dejó el RESUMEN en su log |
+| **v5 kb-backlight** | Self-check `Idle OK (bus=/run/user/1000/bus)` — detección de idle funcional por primera vez |
+
+### 13.5 Cierre (ronda 7, commits 17df257…aeab137)
+
+Backlog P0/P1/P2 de §12 y §13 **resuelto en el repo** y desplegado al host vía
+`scripts/deploy.sh`: NPU /tmp hardening (A1/A2), autostart (M2), fnlock-toggle en
+repo (M1), índice Mutter (M3), hardcodes+CI (M5), sudo hotkeys (M6), desduplicación
+daemon/auto-display (M7), uninstall sincronizado (M8), zombies+toggle_bluetooth,
+health-check/SPEC/thermal/nightlight/sysctl, y la capa nueva **zenbook-doctor**
+(auto-validación/reparación cada 15 min) + **deploy.sh** (despliegue repo→host en
+un comando). Smartmontools instalado (H9). Score final del proyecto: **88/100**.
