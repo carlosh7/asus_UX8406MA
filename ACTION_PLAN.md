@@ -160,9 +160,16 @@ Detalle completo en `AUDIT_REPORT.md` §13. **Brillo v3 desplegado, confirmado p
 4. ~~**Nuevo (derivado de c5a751e)**~~ ✅ **HECHO (ago-28)**: los 20 configs del host en 644 (unidades systemd, modprobe, sysctl, TLP, udev), daemon-reload OK, 11/11 servicios activos, 0 fallidos.
 
 ### P1
-- **H3**: quitar `sudo` de `kb-light-cycle.sh`/`duo set-kb-backlight` (grupo input ya da acceso) — elimina 39 fallos sudo/7d.
+- ~~**H3**: quitar `sudo` de `kb-light-cycle.sh`/`duo set-kb-backlight`~~ (pendiente) — elimina 39 fallos sudo/7d.
 - **H4**: verificar ruta de altavoces tras resume (puerto Speaker existe; enrutado a Headphones + PUP_DONE timeouts). Probar: reproducir audio tras un suspend/resume y mirar `wpctl status`.
 - **H9**: `sudo apt install smartmontools` para que `ssd-health.sh` funcione.
+
+### ✅ Ronda 6d (2026-08-28 noche) — luz de teclado no se apagaba con pantalla en blanco (reporte usuario)
+
+- **Causa raíz**: `Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus` en `zenbook-light-monitor.service` — en unidades de **sistema** `%U` expande al UID del manager (root=0). Bus inexistente → `GetIdletime` fallaba SIEMPRE (0 entradas "Idle detected" en el log histórico) → el script creía actividad perpetua → en oscuridad (donde el ALS enciende la luz) nunca se apagaba. El patrón `%U` ya estaba identificado en `bt-keyboard.service` pero las otras dos unidades `User=` lo repetían (`mic-boost.service`: XDG_RUNTIME_DIR → `pw-dump` fallaba → el boost del micro nunca aplicó, vol 1.00 en vez de 10.0).
+- **Fix**: unidades sin `Environment=%U` (commit `f72868c`); `kb-backlight-unified.sh` v5 resuelve el bus dinámicamente (env → `id -u` → `/run/user/*/bus`), con caché, re-resolución si el bus muere, y self-check al arrancar que registra "Idle OK" o "AVISO". `mic-boost.sh` deriva `XDG_RUNTIME_DIR` del UID efectivo.
+- **Validación**: `scripts/test-kb-backlight.sh` (nuevo) — 6/6 PASS (idle apaga, actividad enciende, dbus muerto degrada con AVISO visible y se auto-repara al volver). bash -n ✓ shellcheck ✓ systemd-analyze ✓.
+- **Pendiente**: despliegue al host (el agente no puede elevar desde esta sesión; pkexec rechazado por no_new_privs). Comando en el resumen al usuario. Tras desplegar: verificar en log "Starting v5 … Idle OK" y que la luz se apague a los 45s de inactividad.
 
 ### P2
 - H6 decidir autoridad sysctl (TLP vs repo); H7 monitorear flicker DRM pipe A; H8 monitorear errores HOG BT.
