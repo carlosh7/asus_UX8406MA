@@ -157,11 +157,7 @@ Detalle completo en `AUDIT_REPORT.md` §13. **Brillo v3 desplegado, confirmado p
 1. ~~**H1 logrotate**~~ ✅ **HECHO (ago-28)**: chmod 644 + restart por el usuario; logrotate ya acepta el config. Fix de origen en installer commiteado (`c5a751e`).
 2. ~~**H2 energía**~~ ✅ **HECHO (ago-28)**: snap auto-cpufreq removido. Pendiente menor: `sudo tlp start` para re-aplicar EPP (quedó `default` tras remover el snap; se corrige solo en el próximo evento de energía).
 3. ~~**H5 mic**~~ ✅ **HECHO (ago-28)**: desmuteado (vol 1.00 sin MUTED).
-4. **Nuevo (derivado de c5a751e)**: los demás configs instalados por la versión vieja siguen 0664 en el host:
-```bash
-sudo chmod 644 /etc/systemd/system/zenbook*.service /etc/systemd/system/{brightness-sync,battery-limit,mic-boost}.service /etc/modprobe.d/xe-gpu-optimize.conf /etc/sysctl.d/99-performance.conf /etc/tlp.d/01-zenbook.conf /etc/udev/rules.d/*zenbook*.rules /etc/udev/rules.d/50-usb-power-management.rules
-sudo systemctl daemon-reload
-```
+4. ~~**Nuevo (derivado de c5a751e)**~~ ✅ **HECHO (ago-28)**: los 20 configs del host en 644 (unidades systemd, modprobe, sysctl, TLP, udev), daemon-reload OK, 11/11 servicios activos, 0 fallidos.
 
 ### P1
 - **H3**: quitar `sudo` de `kb-light-cycle.sh`/`duo set-kb-backlight` (grupo input ya da acceso) — elimina 39 fallos sudo/7d.
