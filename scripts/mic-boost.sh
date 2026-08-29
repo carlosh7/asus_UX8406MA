@@ -1,4 +1,8 @@
 #!/bin/bash
+# %U en unidades de sistema expande a 0 (root): derivar el runtime de PipeWire
+# del UID efectivo del servicio (User=)
+XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export XDG_RUNTIME_DIR
 sleep 3
 MIC_ID=$(pw-dump 2>/dev/null | python3 -c "
 import json,sys

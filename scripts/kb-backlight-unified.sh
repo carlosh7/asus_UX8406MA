@@ -1,26 +1,30 @@
 #!/bin/bash
 # ============================================================================
-# Zenbook Duo Linux - Unified Keyboard Backlight Manager v4
+# Zenbook Duo Linux - Unified Keyboard Backlight Manager v5
+# v5: detección de idle REPARADA — el bus de sesión se resuelve dinámicamente
+#     (la unidad tenía %U → /run/user/0 en servicio de sistema: GetIdletime
+#     fallaba siempre y la luz quedaba encendida con la pantalla apagada).
+#     Self-check al arrancar + AVISO visible si el bus no responde.
 # v4: Faster idle wake-up (1s polling when off, 3s when on)
 # ============================================================================
 
-BK_SCRIPT="/usr/local/bin/bk.py"
-ALS_PATH=$(ls /sys/bus/iio/devices/iio:device*/in_illuminance_raw 2>/dev/null | head -n 1)
-STATE_FILE="/var/lib/zenbook-duo/kb-backlight.state"
-TIMESTAMP_FILE="/var/lib/zenbook-duo/kb-backlight.timestamp"
-LOG_FILE="/var/log/zenbook-kb-backlight.log"
+BK_SCRIPT="${ZB_BK_SCRIPT:-/usr/local/bin/bk.py}"
+STATE_FILE="${ZB_STATE_FILE:-/var/lib/zenbook-duo/kb-backlight.state}"
+TIMESTAMP_FILE="${ZB_TIMESTAMP_FILE:-/var/lib/zenbook-duo/kb-backlight.timestamp}"
+LOG_FILE="${ZB_LOG_FILE:-/var/log/zenbook-kb-backlight.log}"
 
 # --- Configuration -----------------------------------------------------------
 
-CHECK_INTERVAL_ACTIVE=3     # Seconds between checks when backlight is ON
-CHECK_INTERVAL_IDLE=1       # Seconds between checks when backlight is OFF (fast wake-up)
-INACTIVITY_TIMEOUT=30000    # 30 seconds idle -> turn off backlight (ms)
-DEBOUNCE_SEC=10             # Minimum seconds between level changes (when ON)
+CHECK_INTERVAL_ACTIVE="${ZB_ACTIVE:-3}"     # Seconds between checks when backlight is ON
+CHECK_INTERVAL_IDLE="${ZB_IDLE_POLL:-1}"    # Seconds between checks when backlight is OFF (fast wake-up)
+INACTIVITY_TIMEOUT="${INACTIVITY_TIMEOUT:-30000}"  # 30 seconds idle -> turn off backlight (ms)
+DEBOUNCE_SEC=10                             # Minimum seconds between level changes (when ON)
 
 # Config opcional del usuario (sobreescribe lo anterior):
 #   /etc/zenbook-duo/kb-backlight.conf
 #   Ejemplo: INACTIVITY_TIMEOUT=60000  (60s antes de apagar la luz)
-[ -f /etc/zenbook-duo/kb-backlight.conf ] && . /etc/zenbook-duo/kb-backlight.conf
+[ -z "${ZB_SKIP_CONF:-}" ] && [ -f /etc/zenbook-duo/kb-backlight.conf ] && \
+    . /etc/zenbook-duo/kb-backlight.conf
 
 # Light thresholds (raw ALS values, scale=0.001)
 LIGHT_BRIGHT=2500     # >2500 raw -> level 0 (off, bright enough)
@@ -44,12 +48,54 @@ resolve_als_path() {
     echo "$path"
 }
 
-get_idle_ms() {
-    local idle=$(dbus-send --print-reply --dest=org.gnome.Mutter.IdleMonitor \
+# --- Bus de sesión del usuario gráfico ---------------------------------------
+# En servicios de sistema systemd no hereda el bus y el especificador %U
+# expande a 0 (root). Resolvemos el socket real probando candidatos (env,
+# UID efectivo, resto de /run/user/*/bus) y cacheamos el que responda.
+# NOTA: get_idle_ms setea IDLE_MS como global — NO llamarla dentro de $( ),
+# el subshell perdería la caché del bus (bug del primer intento v5).
+IDLE_BUS=""
+IDLE_MS=0
+IDLE_WARNED=0
+
+_idle_query() {
+    dbus-send --print-reply --dest=org.gnome.Mutter.IdleMonitor \
         /org/gnome/Mutter/IdleMonitor/Core \
         org.gnome.Mutter.IdleMonitor.GetIdletime 2>/dev/null | \
-        grep uint64 | awk '{print $2}')
-    echo "${idle:-0}"
+        grep uint64 | awk '{print $2}'
+}
+
+get_idle_ms() {
+    local c idle
+    if [ -n "$IDLE_BUS" ]; then
+        idle=$(_idle_query)
+        if [ -n "$idle" ]; then
+            IDLE_MS=$idle
+            return
+        fi
+        IDLE_BUS=""   # el bus cacheado murió: re-resolver ahora
+    fi
+    local -a candidates=()
+    [ -n "$DBUS_SESSION_BUS_ADDRESS" ] && candidates+=("$DBUS_SESSION_BUS_ADDRESS")
+    candidates+=("unix:path=/run/user/$(id -u)/bus")
+    local d
+    for d in /run/user/*/bus; do
+        [ -S "$d" ] && candidates+=("unix:path=$d")
+    done
+    for c in "${candidates[@]}"; do
+        idle=$(DBUS_SESSION_BUS_ADDRESS="$c" _idle_query)
+        if [ -n "$idle" ] && [ "$idle" -ge 0 ] 2>/dev/null; then
+            IDLE_BUS=$c
+            IDLE_MS=$idle
+            IDLE_WARNED=0
+            return
+        fi
+    done
+    IDLE_MS=0
+    if [ "$IDLE_WARNED" -eq 0 ]; then
+        log_msg "AVISO: sin bus de sesión para Mutter IdleMonitor — idle-off INACTIVO"
+        IDLE_WARNED=1
+    fi
 }
 
 get_ambient_light() {
@@ -103,8 +149,17 @@ keyboard_is_attached() {
 
 # --- Main Loop ---------------------------------------------------------------
 
-ALS_PATH=$(resolve_als_path)
-log_msg "Starting v4 | ALS: $ALS_PATH | Timeout: ${INACTIVITY_TIMEOUT}ms | Poll: ${CHECK_INTERVAL_IDLE}s(off)/${CHECK_INTERVAL_ACTIVE}s(on)"
+ALS_PATH="${ZB_ALS_PATH:-}"
+[ -n "$ALS_PATH" ] || ALS_PATH=$(resolve_als_path)
+
+# Self-check: si la detección de idle no funciona, la luz quedaría siempre
+# encendida en oscuridad (bug ago-2026). Dejarlo registrado en el log.
+get_idle_ms
+if [ -n "$IDLE_BUS" ]; then
+    log_msg "Starting v5 | ALS: $ALS_PATH | Timeout: ${INACTIVITY_TIMEOUT}ms | Poll: ${CHECK_INTERVAL_IDLE}s(off)/${CHECK_INTERVAL_ACTIVE}s(on) | Idle OK (bus=$IDLE_BUS, ${IDLE_MS}ms)"
+else
+    log_msg "Starting v5 | ALS: $ALS_PATH | AVISO: sin bus de sesión para Mutter IdleMonitor — idle-off INACTIVO"
+fi
 echo "2" > "$STATE_FILE"
 
 PREV_IDLE_STATE="active"   # "active" or "idle"
@@ -119,7 +174,8 @@ while true; do
     fi
 
     # 2. Check inactivity FIRST (before ALS)
-    idle_ms=$(get_idle_ms)
+    get_idle_ms
+    idle_ms=$IDLE_MS
 
     if [ "$idle_ms" -ge "$INACTIVITY_TIMEOUT" ] 2>/dev/null; then
         # IDLE: turn off backlight, poll fast for wake-up

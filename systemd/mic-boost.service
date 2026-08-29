@@ -4,7 +4,9 @@ After=graphical.target
 
 [Service]
 Type=oneshot
-Environment=XDG_RUNTIME_DIR=/run/user/%U
+# SIN Environment con %U: en servicios de sistema %U expande a 0 (root) →
+# pw-dump/wpctl no encontraban PipeWire y el boost no aplicaba nunca.
+# El script deriva XDG_RUNTIME_DIR del UID efectivo (User=).
 ExecStart=/usr/local/bin/mic-boost.sh
 RemainAfterExit=yes
 

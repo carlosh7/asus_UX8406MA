@@ -9,7 +9,10 @@ Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus
+# SIN Environment con %U: en servicios de sistema %U expande a 0 (root) y el
+# bus resultante no existe → GetIdletime fallaba siempre y el idle-off nunca
+# se activaba (luz de teclado encendida con pantalla apagada, ago-2026).
+# El script resuelve el bus del usuario efectivo (User=) dinámicamente.
 
 [Install]
 WantedBy=graphical.target
