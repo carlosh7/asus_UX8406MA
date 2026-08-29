@@ -140,3 +140,60 @@ No hay `/home/jim` ni usuarios hardcodeados en código de ejecución ✓ (solo U
 **Validaciones post-Fase 0**: bash -n todos ✓ · shellcheck archivos nuevos limpio · systemd-analyze verify ✓ · gitleaks 0 fugas · 11/11 unidades activas · 0 failed
 
 **B8 VERIFICADO POR USUARIO ✅**: primer intento resultó en inversión completa → evidencia de que el cableado físico es 425b=panel SUPERIOR, 425a=panel INFERIOR (contrario a los comentarios del health-check original). Mapeos intercambiados y re-testeado: touch inferior responde abajo, superior arriba. Fix definitivo en commit 8f237da.
+
+---
+
+## 12. Ronda 6 (2026-08-28) — Re-análisis completo + validación en vivo del host
+
+**Alcance:** revisión de todo el árbol actual (scripts/, install/, systemd/, daemon/, config/, CI), validaciones estáticas y pruebas sobre el host vivo donde el proyecto está instalado y en control.
+
+### 12.1 Validación en vivo — TODO FUNCIONANDO
+
+| Check | Resultado |
+|-------|-----------|
+| Servicios | 11/12 activos (suspend-backlight es oneshot de resume), **0 failed**, 0 warnings/errors en 24h de journal |
+| `zenbook-health-check.sh` | **ALL CHECKS PASSED** (ALS, dual-touch, fan 4100 RPM, batería 80%/80%, night light, audio, thermal, WiFi, USB autosuspend) |
+| Mapeo táctil | dconf correcto y aplicado: `touchscreens/04f3:425b→eDP-1` (sup), `425a→eDP-2` (inf) — coherente con B8 |
+| Hotkeys | mapper root con 5 evtest vivos; init de fila cada 60s rc=0; `/etc/zenbook-duo/fnlock-mode=0`; F5/F6/F9 verificados ronda 5 |
+| `brightness-sync` | **FUNCIONA con inotify real**: journal muestra eventos `intel_backlight/brightness MODIFY` → i915 llama `sysfs_notify` en este kernel (refuta sospecha teórica de bloqueo) |
+| Perfil térmico | auto-switching vivo (performance ↔ balanced según temp) |
+| Deriva repo↔host | `make` en daemon reproduce binarios **byte-idénticos** a `/usr/local/bin` (zenbook-duo y zenbook-sendkey) ✓ · scripts idénticos ✓ · unidades solo difieren en las 2 con `User=` inyectado por installer (por diseño) |
+| udev host | USB 0b05:1b2c `0660 input` ✓ · hidraw BT 1b2d `0660 input` ✓ |
+| Energía | TLP activo+enabled, powertop disabled — **PERO** ver 12.2-M4 |
+| Estáticas | `bash -n` ✓ todos · `systemd-analyze verify` exit 0 · `py_compile` ✓ · gitleaks 0 fugas (68 commits) · shellcheck solo info/estilo (SC2086 en listas de paquetes intencionales) |
+
+### 12.2 Hallazgos nuevos (contra el árbol actual)
+
+**Altos**
+| # | Ubicación | Hallazgo |
+|---|-----------|----------|
+| A1 | `install/install.sh:186-235` | Flujo NPU inseguro en `/tmp`: descarga a ruta predecible (`/tmp/linux-npu-driver-*.tar.gz`, además `[ ! -f ]` usa un tarball pre-plantado), extracción como root en /tmp world-writable, e instalación de globs `ls intel-*npu_*.deb` → privesc local clásico. Usar `mktemp -d` + `tar --no-same-owner` |
+| A2 | `install/install.sh:199-209` | `basename` de URL del JSON remoto de GitHub interpolado dentro de código Python (`asset_name = '$NPU_ASSET'`) → metadatos remotos ejecutados como root. Pasar el valor por argv/stdin, nunca interpolarlo |
+
+**Medios**
+| # | Ubicación | Hallazgo |
+|---|-----------|----------|
+| M1 | `scripts/setup-hotkeys.sh:51`, host | `<Super>Esc` apunta a `/usr/local/bin/fnlock-toggle.sh` que **existe en el host pero no está en el repo ni lo instala install.sh** → roto en reinstalación limpia. Commit del script + añadirlo al installer |
+| M2 | `install/install.sh:465-476`, host | `~/.config/autostart` creado como root → **confirmado en host: `drwxr-xr-x root root`**; el usuario no puede gestionar su autostart. `chown` recursivo o `install -d -o user` |
+| M3 | `scripts/duo:371,462,521`, `wayland-display-mgr.py:16` | `is-current` leído en `mode_info[5]`; Mutter actual lo expone en `[6]` (touch-remap.sh ya corregido a `[6]` con `len>=7`) → selección de modo cae silenciosamente al primer modo; funciona hoy por coincidencia (primer modo = activo) |
+| M4 | host, `install.sh:524` | **auto-cpufreq snap ACTIVO junto a TLP** (dos gestores de energía compitiendo). El ACTION_PLAN asumía "hoy inactivo" — falso. Remover snap y la línea del installer |
+| M5 | `scripts/bt-keyboard-mapper.py:168-173` | Hardcodea `"jim"` y `/run/user/1000` como fallback de mic-mute (funciona en este host, rompe portabilidad; viola la regla anti-hardcode). El grep de CI (`lint.yml:41`) **no escanea `.py`** → agujero en el check |
+| M6 | `kb-light-cycle.sh:21`, `duo:715`, `toggle-bluetooth.sh:7,10` | Desajuste script↔sudoers: los primeros llaman `sudo bk.py` (fuera de sudoers desde Fase 0 → prompt bajo keybinding de usuario); toggle-bluetooth llama `rfkill` sin sudo (sudoers solo concede `rfkill … bluetooth`). En este host funcionan porque pasan por el mapper root; la vía de bindings GNOME (custom0-2) está rota silenciosamente |
+| M7 | `systemd/zenbook-duo` + `zenbook-auto-display` | Duplicación activa: el daemon C y auto-display.sh monitorean el teclado y ambos aplican `duo top/both` (carrera posible). B7 cubría watch-displays; este par no |
+| M8 | `install/uninstall.sh:89,146` | No elimina `99-zenbook-keyboard-bt.rules` (ni regla NPU); el `gsettings reset` del mapeo táctil tiene sintaxis inválida (schema relocatable requiere `schema:path`) → desinstalación incompleta |
+
+**Bajos (selección)**
+- Zombies: `daemon/src/main.c` `exec_cmd()` hace `waitpid(WNOHANG)` y no reap — 2 zombies confirmados hijos del daemon (`[bash]`, `[sudo]` desde el boot).
+- `daemon/src/main.c:165-171` `toggle_bluetooth()` es código muerto y con bug latente (`rfkill block` sin tipo fallaría; con bloqueo global mataría WiFi).
+- `daemon/zenbook-sendkey` (binario) está **trackeado en git**; `make clean` lo borra y deja el repo dirty. `git rm --cached` + `.gitignore`.
+- `scripts/thermal-monitor.sh:129-131`: rama `quiet→performance` inalcanzable (BAL_TEMP 68 captura todo ≥68) → enfría a máx con un paso extra de 30s.
+- `scripts/zenbook-health-check.sh:220-221`: etiquetas Top/Bottom **intercambiadas** (Top=425A) contradiciendo B8/código real; :53 no lista `zenbook-suspend-backlight`.
+- `scripts/mic-boost.sh:14`: gain 10.0 (1000%) sin reintento si PipeWire no subió en 3s (y riesgo de clipping).
+- `scripts/zenbook-config.sh`: `restore` depende de un archivo de modo que el installer nunca crea; `duo none` no es un comando válido.
+- `SPEC.md:36-38`: F10/F11 marcadas ❌ pero el mapper v2 ya las implementa (BT toggle / nightlight) — doc desactualizada.
+- `setup-hotkeys.sh` invocado desde installer sin bus de sesión → bindings pueden no aplicarse en instalación limpia (en este host ya persisten en dconf).
+- Sudoers escrito sin `visudo -cf` previo; nightlight X11 depende de `redshift` que el installer no instala; `duo:34` busca `Xauthority` en vez de `.mutter-Xwaylandauth-*`.
+
+### 12.3 Score recalibrado: **79 / 100** (antes 77)
+
+Sube por hotkeys implementadas (rondas 2-5) y validación integral en vivo verde; baja en seguridad por A1/A2 y en bugs por los nuevos hallazgos. El proyecto **funciona de verdad en el host** — los hallazgos son de robustez, reproducibilidad e higiene, no de operación diaria.

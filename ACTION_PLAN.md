@@ -94,3 +94,55 @@ Validaciones: bash -n ✓ · py_compile ✓ · shellcheck limpio en nuevos ✓
 - **Causa**: los números de nodo (/dev/input/eventN) se RECICLAN al reconectar el teclado; el evtest viejo quedaba sordo sobre la instancia muerta y el re-escaneo lo consideraba "ya monitoreado" (mismo path) → nunca re-enganchaba. Además evtest sin line-buffering retenía eventos en pipe de 4KB.
 - **Fix**: el mapper rastrea la IDENTIDAD física del dispositivo (ruta sysfs del input); si cambia bajo el mismo event node → mata el evtest viejo, lo re-engancha y reinicializa la fila. Todo con stdbuf -oL.
 - **Verificado en vivo por BT**: F5/F6/F9 instantáneos con feedback visual (brillo %, mic).
+
+---
+
+## 🔎 RONDA 6 (2026-08-28) — re-auditoría completa + validación en vivo
+
+Detalle en `AUDIT_REPORT.md` §12. **El proyecto está operativo y validado en el host** (health-check ALL PASSED, 0 servicios fallidos, sin deriva repo↔host, sync de brillo y hotkeys verificados). Pendiente de estos hallazgos:
+
+### P0 — seguridad / coherencia del host (próxima sesión)
+1. **A1+A2 installer NPU**: reescribir flujo con `mktemp -d`, `tar --no-same-owner`, instalación por nombres exactos (no globs) y pasar `asset_name` a Python por argv (nunca interpolar JSON remoto en código).
+2. **M4 auto-cpufreq**: está ACTIVO junto a TLP (contradice este plan). `sudo snap remove auto-cpufreq` + quitar `install.sh:524`.
+3. **M2 autostart root-owned**: `sudo chown -R jim:jim /home/jim/.config/autostart` + arreglar installer (`install -d -o "$INSTALL_USER"`).
+
+### P1 — reproducibilidad / portabilidad
+- M1: commit de `fnlock-toggle.sh` al repo + instalarlo en install.sh (hoy solo existe en el host).
+- M3: corregir `mode_info[5]→[6]` en `duo` (3 sitios) y `wayland-display-mgr.py` (igual que touch-remap).
+- M5: quitar hardcode `"jim"`/`run/user/1000` del mapper; añadir `*.py` al grep anti-hardcode de CI.
+- M6: alinear hotkeys de usuario con sudoers (bk.py directo por grupo input sin sudo; toggle-bluetooth con `sudo -n rfkill … bluetooth` o vía polkit) y registrar fallo visible en vez de `|| true`.
+- M7: desduplicar daemon C vs auto-display.sh (decidir un único controlador de attach/detach).
+- M8: sincronizar uninstall.sh (regla BT hidraw, regla NPU, reset táctil con sintaxis correcta).
+
+### P2 — higiene
+- `git rm --cached daemon/zenbook-sendkey` + `.gitignore` (artefacto de build trackeado; `make clean` deja el repo dirty).
+- Zombies del daemon: handler SIGCHLD (o `waitpid` loop) en main.c; borrar `toggle_bluetooth()` muerto.
+- health-check: intercambiar etiquetas Top/Bottom (alinearlo con B8) y añadir `zenbook-suspend-backlight` a la lista de servicios.
+- SPEC.md: marcar F10/F11 como implementadas (mapper v2); notas de F12/Fn siguen válidas.
+- thermal-monitor: corregir rama `quiet→performance` (saltar directo a performance ≥82°C).
+- mic-boost: reintento si PipeWire no está arriba + gain razonable con boost separado.
+- `visudo -cf` tras escribir sudoers; commit del archivo de modo que zenbook-config espera, o crearlo en install.
+
+---
+
+## ✅ Ronda 6b (2026-08-28) — Fix brillo adaptable v3 (reportado por usuario)
+
+**Reporte**: el brillo cambiaba constantemente con la luz del día y, al ajustarlo manualmente, el sistema lo sobreescribía en ~5s. El log del host lo confirma: `18:22:19 Brightness: 400 -> 32` y `18:23:36 Brightness: 400 -> 32` (dos intentos del usuario aplastados).
+
+**Causa raíz** (v2): el contador de estabilidad `_manual_hits` se REINICIABA en el ciclo en que el brillo dejaba de cambiar (rama else de `adaptive-brightness.sh:157`), así que tras asentarse el ajuste manual el loop caía a STEP 3 y re-aplicaba la curva. Además `MAX_PAUSE_SEC=180` limitaba la pausa a 3 min y no existía histéresis frente al ruido del ALS (medido: ±7% jitter).
+
+**Fix** — `scripts/adaptive-brightness.sh` v3:
+- El ajuste manual se ADOPTA como preferencia (sesgo = brillo_usuario − curva) tras estabilizar; nunca se sobreescribe mientras dure.
+- Re-adapta solo con cambio real de luz (ΔALS ≥50% relativo o ≥40k raw) — descarta el sesgo — o tras `MANUAL_HOLD_SEC=3600` conservando el sesgo.
+- Modo auto con histéresis (ΔALS ≥25%, ≥60s entre aplicaciones) + EMA(4) del sensor → sin oscilación.
+- Rutas sobreescribibles por env (`ZB_*`) para test con sysfs simulado.
+
+**Validación**: `scripts/test-adaptive-brightness.sh` (nuevo) — 13/13 PASS: ruido sin efecto, manual persistente, fluctuación pequeña no reanuda, cambio real re-adapta, timeout conserva sesgo, pasos F5/F6 adoptan solo el valor final, ajuste manual reiterado actualiza sesgo. bash -n ✓ shellcheck limpio ✓.
+
+**Pendiente de despliegue al host** (requiere sudo del usuario):
+```
+sudo cp scripts/adaptive-brightness.sh /usr/local/bin/adaptive-brightness.sh
+sudo systemctl restart zenbook-adaptive-brightness
+```
+
+**Confirmación de usuario (Ronda 6)**: el mapeo táctil de ambas pantallas funciona bien con teclado puesto y retirado ✓ (B8 re-verificado en uso diario).
