@@ -197,3 +197,43 @@ No hay `/home/jim` ni usuarios hardcodeados en código de ejecución ✓ (solo U
 ### 12.3 Score recalibrado: **79 / 100** (antes 77)
 
 Sube por hotkeys implementadas (rondas 2-5) y validación integral en vivo verde; baja en seguridad por A1/A2 y en bugs por los nuevos hallazgos. El proyecto **funciona de verdad en el host** — los hallazgos son de robustez, reproducibilidad e higiene, no de operación diaria.
+
+---
+
+## 13. Ronda 6c (2026-08-28) — Auditoría del HOST en vivo
+
+**Alcance:** estado real del equipo (energía, térmico, audio, display, GPU/NPU, journal 7d). Lecturas no privilegiadas + 2 diálogos pkexec autorizados por el usuario.
+
+### 13.1 Fix aplicado y verificado en vivo
+
+| Item | Resultado |
+|------|-----------|
+| **Brillo adaptable v3** desplegado a `/usr/local/bin` y reiniciado | `19:40:02 MANUAL: adoptado BR=170 (sesgo 138 vs curva 32)` — el valor del usuario **persiste** ✓. Causa v2 documentada en ACTION_PLAN Ronda 6b. Commits `0c20e01` (fix+tests 13/13) y `3b6f05e` (docs) |
+
+### 13.2 Descalibrado encontrado (priorizado)
+
+| # | Severidad | Hallazgo | Evidencia | Fix |
+|---|-----------|----------|-----------|-----|
+| H1 | **Alta** | **logrotate muerto por config del propio proyecto**: `/etc/logrotate.d/zenbook-duo.conf` quedó con modo 0664 → logrotate lo rechaza y el servicio **falla a diario** (5×/7d) → rotación de TODOS los logs del sistema parada | journal logrotate "dangerous mode 0664" | `chmod 644` en host + installer con `install -m 644` |
+| H2 | **Alta** | **Doble gestor de energía**: TLP (enabled, aplica su política) + snap **auto-cpufreq ACTIVO** compiten. En vivo: EPP=`default` en AC cuando TLP pide `performance`; TLP además pisa sysctl del repo (`vm.dirty_writeback_centisecs` 1500 real vs 500 del repo) | snap services + sysctl -n vs config | `snap remove auto-cpufreq` + quitar `install.sh:524` (Fase 2) |
+| H3 | Media | **Hotkeys de usuario con sudo sin NOPASSWD**: 39 eventos "sudo:auth conversation failed" en 7d — el binding F4 llama `sudo bk.py` y el sudoers lo excluyó desde Fase 0 (hallazgo M6 confirmado en vivo). Las vías root (mapper) sí funcionan | journal sudo ×39 | alinear scripts↔sudoers (bk.py directo por grupo input) |
+| H4 | Media | **CS35L41 PUP_DONE timeouts** (16×/7d, último hoy 12:08 ≈ resume) + sumidero analógico enrutado a puerto "Headphones" aunque el **puerto Speaker físico existe** (`Speaker:playback_FR`, physical=true). Si no hay auriculares conectados, jack-detection o el resume deja los speakers sin enrutar | journal cs35l41 + wpctl inspect 68 | probar selección de puerto tras resume; vigilar |
+| H5 | Media | Micrófono **MUTED** (vol 1.00 MUTED en default source) — posiblemente intencional vía F9, pero conviene saberlo | wpctl | `wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 0` si no es intencional |
+| H6 | Baja | **sysctl 99-performance.conf parcialmente inefectivo**: TLP sobrescribe dirty_writeback; `log_martians` 0 vs 1. (tcp_rmem/wmem OK — falso positivo por tabs) | sysctl -n vs repo | decidir autoridad: TLP o repo |
+| H7 | Baja | **DRM "Atomic update failure" pipe A** 108×/7d (+pipe B 4×) — flicker potencial en dual OLED 120Hz; sin impacto funcional medible | journal kernel | monitor; reportar upstream si hay flicker visible |
+| H8 | Baja | **BT HOG set_report errors** 43×/7d — teclado BT; puede degradar fn-lock/reports tras reconexiones | journal bluetoothd | monitor (mapper v2 ya re-inicializa fila cada 60s) |
+| H9 | Baja | `smartctl` no instalado → `ssd-health.sh` del proyecto no puede funcionar | which smartctl | `apt install smartmontools` o quitar dependencia |
+| H10 | Info | Teclado BT detectado por upower es un **Logitech K850 externo** (100%), no el desacoplable (que estaba en USB) | upower | — |
+
+### 13.3 Bien calibrado (verificado OK)
+
+- **Batería**: salud **89.4%** (67.1/75.1 Wh, 151 ciclos), límite 80% activo — "Not charging" clavada en 80% es el comportamiento correcto.
+- **Térmico**: pkg 66°C, fan ~3500 RPM, perfil `balanced` acorde a la curva del thermal-monitor (auto-switching vivo); sin throttling.
+- **NPU**: `/dev/accel0` presente (root:render, ACL para jim) ✓.
+- **Night light**: activa a 3700K ✓. **Touch dual** ✓ (confirmado por usuario con teclado puesto y retirado).
+- **0 unidades fallidas**, 0 segfaults en 7d, disco 57% usado, TLP enabled (los errores "not enabled" son del momento de instalación, ago-22 09:00).
+- Governor performance en AC = correcto según TLP; perfil ACPI dinámico funcionando.
+
+### 13.4 Pendiente de medición (requiere el diálogo pkexec que no se completó)
+
+Valores reales de `/sys/module/xe/parameters/` (FBC/PSR — leer como root; como jim los archivos son 0400), `tlp-stat -s` completo, SMART del NVMe (requiere instalar `smartmontools` o `nvme-cli`), `visudo -cf` del sudoers. Comando listo en ACTION_PLAN Ronda 6c.

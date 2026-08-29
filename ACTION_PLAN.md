@@ -146,3 +146,27 @@ sudo systemctl restart zenbook-adaptive-brightness
 ```
 
 **Confirmación de usuario (Ronda 6)**: el mapeo táctil de ambas pantallas funciona bien con teclado puesto y retirado ✓ (B8 re-verificado en uso diario).
+
+---
+
+## 🔎 Ronda 6c (2026-08-28) — Auditoría del host en vivo
+
+Detalle completo en `AUDIT_REPORT.md` §13. **Brillo v3 desplegado, confirmado por usuario y commiteado** (`0c20e01`). Descalibrados priorizados:
+
+### P0 — aplicar al host (una sola sesión de sudo)
+1. **H1 logrotate**: `sudo chmod 644 /etc/logrotate.d/zenbook-duo.conf && sudo systemctl restart logrotate` + en repo: installer debe usar `install -m 644` para esa config (bug del installer).
+2. **H2 energía**: `sudo snap remove auto-cpufreq` + quitar `install.sh:524`. Evidencia: EPP=default en AC (TLP pisa config), sysctl del repo sobrescrito por TLP.
+3. **H5 mic**: si el mute no es intencional → `wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 0` (o tecla F9).
+
+### P1
+- **H3**: quitar `sudo` de `kb-light-cycle.sh`/`duo set-kb-backlight` (grupo input ya da acceso) — elimina 39 fallos sudo/7d.
+- **H4**: verificar ruta de altavoces tras resume (puerto Speaker existe; enrutado a Headphones + PUP_DONE timeouts). Probar: reproducir audio tras un suspend/resume y mirar `wpctl status`.
+- **H9**: `sudo apt install smartmontools` para que `ssd-health.sh` funcione.
+
+### P2
+- H6 decidir autoridad sysctl (TLP vs repo); H7 monitorear flicker DRM pipe A; H8 monitorear errores HOG BT.
+
+### Medición pendiente (1 diálogo pkexec; cancelado por timeout de usuario)
+```bash
+pkexec bash -c 'for p in /sys/module/xe/parameters/{enable_fbc,enable_psr,enable_dc,enable_panel_replay}; do echo "$p=$(cat $p 2>/dev/null)"; done; tlp-stat -s | head -20; visudo -cf /etc/sudoers.d/zenbook-duo; ls -la /etc/logrotate.d/zenbook-duo.conf'
+```
