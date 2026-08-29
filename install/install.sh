@@ -530,12 +530,14 @@ if command -v powertop &>/dev/null; then
     echo "  PowerTOP presente (sin servicio automático; TLP gestiona energía)"
 fi
 
-# Auto-cpufreq (if snap is available)
-if command -v snap &>/dev/null; then
-    snap install auto-cpufreq 2>/dev/null && {
-        auto-cpufreq --install 2>/dev/null || true
-        echo "  auto-cpufreq installed"
-    } || echo "  WARNING: auto-cpufreq installation failed"
+# Auto-cpufreq: DESACTIVADO por decisión de diseño — compite con TLP
+# (auditoría 2026-08 ronda 6c: en el host quedó ACTIVO pisando el EPP de TLP
+# y los sysctl del repo. TLP es el único gestor de energía). Si existe de una
+# instalación previa, se elimina para dejar el sistema coherente.
+if snap list auto-cpufreq >/dev/null 2>&1; then
+    echo "  Removiendo auto-cpufreq residual (compite con TLP)..."
+    auto-cpufreq --remove 2>/dev/null || true
+    snap remove auto-cpufreq 2>/dev/null || true
 fi
 
 # Create persistent state directory

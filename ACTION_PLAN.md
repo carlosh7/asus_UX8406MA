@@ -154,9 +154,14 @@ sudo systemctl restart zenbook-adaptive-brightness
 Detalle completo en `AUDIT_REPORT.md` §13. **Brillo v3 desplegado, confirmado por usuario y commiteado** (`0c20e01`). Descalibrados priorizados:
 
 ### P0 — aplicar al host (una sola sesión de sudo)
-1. **H1 logrotate**: `sudo chmod 644 /etc/logrotate.d/zenbook-duo.conf && sudo systemctl restart logrotate` + en repo: installer debe usar `install -m 644` para esa config (bug del installer).
-2. **H2 energía**: `sudo snap remove auto-cpufreq` + quitar `install.sh:524`. Evidencia: EPP=default en AC (TLP pisa config), sysctl del repo sobrescrito por TLP.
-3. **H5 mic**: si el mute no es intencional → `wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 0` (o tecla F9).
+1. ~~**H1 logrotate**~~ ✅ **HECHO (ago-28)**: chmod 644 + restart por el usuario; logrotate ya acepta el config. Fix de origen en installer commiteado (`c5a751e`).
+2. ~~**H2 energía**~~ ✅ **HECHO (ago-28)**: snap auto-cpufreq removido. Pendiente menor: `sudo tlp start` para re-aplicar EPP (quedó `default` tras remover el snap; se corrige solo en el próximo evento de energía).
+3. ~~**H5 mic**~~ ✅ **HECHO (ago-28)**: desmuteado (vol 1.00 sin MUTED).
+4. **Nuevo (derivado de c5a751e)**: los demás configs instalados por la versión vieja siguen 0664 en el host:
+```bash
+sudo chmod 644 /etc/systemd/system/zenbook*.service /etc/systemd/system/{brightness-sync,battery-limit,mic-boost}.service /etc/modprobe.d/xe-gpu-optimize.conf /etc/sysctl.d/99-performance.conf /etc/tlp.d/01-zenbook.conf /etc/udev/rules.d/*zenbook*.rules /etc/udev/rules.d/50-usb-power-management.rules
+sudo systemctl daemon-reload
+```
 
 ### P1
 - **H3**: quitar `sudo` de `kb-light-cycle.sh`/`duo set-kb-backlight` (grupo input ya da acceso) — elimina 39 fallos sudo/7d.
