@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Zenbook Doctor periodically
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+Unit=zenbook-doctor.service
+
+[Install]
+WantedBy=timers.target

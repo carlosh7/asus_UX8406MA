@@ -1,0 +1,9 @@
+[Unit]
+Description=Zenbook Doctor - self-validation and self-repair
+After=graphical.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/zenbook-doctor.sh
+StandardOutput=journal
+StandardError=journal
