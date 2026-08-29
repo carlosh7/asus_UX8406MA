@@ -183,34 +183,39 @@ if [ "$WITH_NPU" -eq 1 ]; then
         LATEST_JSON=""
     fi
 
-    NPU_DEB_FILE="/tmp/linux-npu-driver-${NPU_TAG}.tar.gz"
+    # (A1, ronda 6) Directorio de trabajo PRIVADO: descargar/extraer en /tmp con
+    # nombre predecible permitía privesc local (tarball pre-plantado + globs
+    # instalados como root). mktemp 700 root: solo root ve su contenido.
+    NPU_WORKDIR=$(mktemp -d /tmp/npu-driver.XXXXXX)
+    chmod 700 "$NPU_WORKDIR"
     echo "  Latest NPU driver: $NPU_TAG"
 
-    # Download NPU driver
-    if [ ! -f "$NPU_DEB_FILE" ]; then
-        wget -q "$NPU_DEB_URL" -O "$NPU_DEB_FILE" 2>/dev/null || {
-            echo "  WARNING: NPU driver download failed"
-        }
+    # Download NPU driver (siempre fresco: NUNCA reutilizar un tarball existente)
+    NPU_TARBALL="$NPU_WORKDIR/driver.tar.gz"
+    if ! wget -q "$NPU_DEB_URL" -O "$NPU_TARBALL" 2>/dev/null; then
+        echo "  WARNING: NPU driver download failed"
     fi
 
-    if [ -f "$NPU_DEB_FILE" ]; then
-        # Verificar SHA256 contra el digest publicado en la release de GitHub
+    if [ -f "$NPU_TARBALL" ]; then
+        # Verificar SHA256 contra el digest publicado en la release de GitHub.
+        # (A2, ronda 6) el nombre del asset viaja por argv: NUNCA interpolar
+        # metadatos remotos dentro del código Python
         NPU_ASSET=$(basename "$NPU_DEB_URL")
-        EXPECTED_SHA=$(printf '%s' "$LATEST_JSON" | python3 -c "
+        EXPECTED_SHA=$(printf '%s' "$LATEST_JSON" | python3 -c '
 import json, sys
 try:
     data = json.load(sys.stdin)
-    asset_name = '$NPU_ASSET'
-    for a in data.get('assets', []):
-        if a.get('name') == asset_name:
-            print(a.get('digest', '').replace('sha256:', ''))
+    asset_name = sys.argv[1]
+    for a in data.get("assets", []):
+        if a.get("name") == asset_name:
+            print(a.get("digest", "").replace("sha256:", ""))
             break
 except Exception:
-    pass")
-        ACTUAL_SHA=$(sha256sum "$NPU_DEB_FILE" | cut -d' ' -f1)
+    pass' "$NPU_ASSET")
+        ACTUAL_SHA=$(sha256sum "$NPU_TARBALL" | cut -d' ' -f1)
         if [ -n "$EXPECTED_SHA" ] && [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
             echo "  ERROR: checksum mismatch para $NPU_ASSET (esperado $EXPECTED_SHA, real $ACTUAL_SHA)"
-            rm -f "$NPU_DEB_FILE"
+            rm -f "$NPU_TARBALL"
         elif [ -z "$EXPECTED_SHA" ]; then
             echo "  WARNING: sin digest publicable; se continúa sin verificación"
         else
@@ -218,20 +223,21 @@ except Exception:
         fi
     fi
 
-    if [ -f "$NPU_DEB_FILE" ]; then
-        # Extract and install
-        cd /tmp
-        rm -f intel-driver-compiler-npu_*.deb intel-fw-npu_*.deb intel-level-zero-npu_*.deb
-        tar -xf "$NPU_DEB_FILE" 2>/dev/null || true
-        NPU_DEBS=$(ls intel-driver-compiler-npu_*.deb intel-fw-npu_*.deb intel-level-zero-npu_*.deb 2>/dev/null)
-        if [ -n "$NPU_DEBS" ]; then
+    if [ -f "$NPU_TARBALL" ]; then
+        # Extraer e instalar SOLO dentro del directorio privado 700 root
+        tar -xf "$NPU_TARBALL" -C "$NPU_WORKDIR" --no-same-owner 2>/dev/null || true
+        NPU_DEB_PATHS=""
+        for d in intel-driver-compiler-npu_*.deb intel-fw-npu_*.deb intel-level-zero-npu_*.deb; do
+            [ -f "$NPU_WORKDIR/$d" ] && NPU_DEB_PATHS="$NPU_DEB_PATHS $NPU_WORKDIR/$d"
+        done
+        if [ -n "$NPU_DEB_PATHS" ]; then
             apt-get install -y -qq libtbb12 2>/dev/null || true
-            dpkg -i $NPU_DEBS 2>/dev/null || true
+            # shellcheck disable=SC2086  # rutas generadas por mktemp de root
+            dpkg -i $NPU_DEB_PATHS 2>/dev/null || true
             echo "  NPU driver installed"
         else
             echo "  WARNING: NPU deb packages not found"
         fi
-        cd "$REPO_DIR"
     fi
 
     # Install the latest Level Zero loader from the Intel PPA (dynamic version)
@@ -256,14 +262,17 @@ except Exception:
 
     if [ -n "$LIBZE_URL" ]; then
         echo "  Latest Level Zero loader: $(basename "$LIBZE_URL")"
-        wget -q "$LIBZE_URL" -O /tmp/libze1_latest.deb 2>/dev/null || true
-        if [ -f /tmp/libze1_latest.deb ]; then
-            dpkg -i /tmp/libze1_latest.deb 2>/dev/null || true
+        LIBZE_DEB="$NPU_WORKDIR/libze1.deb"
+        wget -q "$LIBZE_URL" -O "$LIBZE_DEB" 2>/dev/null || true
+        if [ -f "$LIBZE_DEB" ]; then
+            dpkg -i "$LIBZE_DEB" 2>/dev/null || true
             echo "  Level Zero loader installed"
         fi
     else
         echo "  WARNING: Could not determine latest Level Zero loader"
     fi
+
+    rm -rf "$NPU_WORKDIR"
 
     # Add user to render group for NPU access
     if [ -n "$INSTALL_USER" ]; then
@@ -291,7 +300,7 @@ for script in $CORE_SCRIPTS; do
 done
 
 # Service scripts
-SERVICE_SCRIPTS="auto-display.sh start.sh kb-light-cycle.sh toggle-bluetooth.sh setup-hotkeys.sh mic-boost.sh setup-displays.sh kb-backlight-unified.sh adaptive-brightness.sh thermal-monitor.sh audio-diagnose.sh audio-calibrate.sh wifi-diagnose.sh test_hardware.sh webcam-diagnose.sh webcam-optimize.sh bt-keyboard-mapper.py zenbook-config.sh suspend-backlight.sh nightlight.sh ssd-health.sh fn-lock.sh system-health.sh disk-monitor.sh weekly-maintenance.sh zzz-keyboard-light oled-protect.sh webcam-privacy.sh firmware-check.sh zenbook-health-check.sh zenbook-boot-test.sh touch-remap.sh setup-touch-wayland.sh amp-enable.sh"
+SERVICE_SCRIPTS="auto-display.sh start.sh kb-light-cycle.sh toggle-bluetooth.sh setup-hotkeys.sh mic-boost.sh setup-displays.sh kb-backlight-unified.sh adaptive-brightness.sh thermal-monitor.sh audio-diagnose.sh audio-calibrate.sh wifi-diagnose.sh test_hardware.sh webcam-diagnose.sh webcam-optimize.sh bt-keyboard-mapper.py zenbook-config.sh suspend-backlight.sh nightlight.sh ssd-health.sh fn-lock.sh fnlock-toggle.sh system-health.sh disk-monitor.sh weekly-maintenance.sh zzz-keyboard-light oled-protect.sh webcam-privacy.sh firmware-check.sh zenbook-health-check.sh zenbook-boot-test.sh touch-remap.sh setup-touch-wayland.sh amp-enable.sh zenbook-doctor.sh"
 for script in $SERVICE_SCRIPTS; do
     if [ -f "$REPO_DIR/scripts/$script" ]; then
         cp "$REPO_DIR/scripts/$script" "$BIN_DIR/"
@@ -428,7 +437,14 @@ $INSTALL_USER ALL=(root) NOPASSWD: /usr/sbin/rfkill block bluetooth
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/sbin/rfkill unblock bluetooth
 EOF
     chmod 0440 /etc/sudoers.d/zenbook-duo
-    echo "  Sudoers configured for $INSTALL_USER"
+    # Validar antes de seguir: un sudoers corrupto rompe sudo para TODO el sistema
+    if ! visudo -cf /etc/sudoers.d/zenbook-duo >/dev/null 2>&1; then
+        echo "  ERROR: sudoers generado inválido — eliminándolo para no romper sudo"
+        rm -f /etc/sudoers.d/zenbook-duo
+        ERRORS=$((ERRORS + 1))
+    else
+        echo "  Sudoers configured for $INSTALL_USER"
+    fi
 fi
 
 # Install systemd services
@@ -447,10 +463,16 @@ fi
 systemctl daemon-reload
 
 # Enable all services
-SERVICES="zenbook-duo.service brightness-sync.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-auto-display.service zenbook-config.service battery-limit.service zenbook-nightlight.service zenbook-suspend-backlight.service mic-boost.service zenbook-bt-keyboard.service"
+# NOTA (M7, ronda 6): zenbook-auto-display NO se habilita — duplica al daemon C
+# (ambos monitorean el teclado y aplican duo top/both: carrera). La unidad se
+# instala por si se quiere usar manualmente.
+SERVICES="zenbook-duo.service brightness-sync.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-config.service battery-limit.service zenbook-nightlight.service zenbook-suspend-backlight.service mic-boost.service zenbook-bt-keyboard.service"
 for svc in $SERVICES; do
     systemctl enable "$svc" 2>/dev/null && echo "  Enabled: $svc" || echo "  WARNING: Failed to enable $svc"
 done
+systemctl disable zenbook-auto-display.service 2>/dev/null || true
+# Doctor: auto-validación/monitoreo/auto-reparación periódica
+systemctl enable --now zenbook-doctor.timer 2>/dev/null && echo "  Enabled: zenbook-doctor.timer (doctor cada 15 min)" || echo "  WARNING: doctor timer no habilitado"
 
 # Desactivar el ALS propio de GNOME: compite con adaptive-brightness
 if [ -n "$INSTALL_USER" ]; then
@@ -470,7 +492,10 @@ done
 # Create GNOME autostart
 if [ -n "$INSTALL_USER" ]; then
     AUTOSTART_DIR="$USER_HOME/.config/autostart"
-    mkdir -p "$AUTOSTART_DIR"
+    # (M2, ronda 6) crear el directorio COMO EL USUARIO: mkdir como root deja
+    # autostart/ root-owned y el usuario no puede gestionar su autostart
+    install -d -m 755 -o "$INSTALL_USER" -g "$INSTALL_USER" "$AUTOSTART_DIR"
+    install -m 664 -o "$INSTALL_USER" -g "$INSTALL_USER" /dev/null "$AUTOSTART_DIR/zenbook-duo.desktop"
     cat > "$AUTOSTART_DIR/zenbook-duo.desktop" << EOF
 [Desktop Entry]
 Type=Application
@@ -480,7 +505,6 @@ Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
 EOF
-    chown "$INSTALL_USER:$INSTALL_USER" "$AUTOSTART_DIR/zenbook-duo.desktop"
     echo "  GNOME autostart configured"
 fi
 
