@@ -43,7 +43,7 @@ echo "[1/5] Stopping and disabling services..."
 # Doctor timer primero (puede reiniciar servicios mientras se desinstala)
 systemctl disable --now zenbook-doctor.timer 2>/dev/null && echo "  Disabled: zenbook-doctor.timer" || true
 
-ALL_SERVICES="zenbook-duo.service brightness-sync.service zenbook-auto-display.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-config.service battery-limit.service zenbook-nightlight.service zenbook-suspend-backlight.service mic-boost.service zenbook-bt-keyboard.service zenbook-doctor.service"
+ALL_SERVICES="zenbook-duo.service brightness-sync.service zenbook-auto-display.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-config.service battery-limit.service zenbook-nightlight.service zenbook-suspend-backlight.service zenbook-resume-display.service mic-boost.service zenbook-bt-keyboard.service zenbook-doctor.service"
 for svc in $ALL_SERVICES; do
     systemctl stop "$svc" 2>/dev/null && echo "  Stopped: $svc" || true
     systemctl disable "$svc" 2>/dev/null && echo "  Disabled: $svc" || true

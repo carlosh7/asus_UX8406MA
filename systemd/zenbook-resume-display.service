@@ -1,0 +1,11 @@
+[Unit]
+Description=Zenbook Duo - Re-apply display layout on resume
+# Patrón documentado de hook de RESUME: WantedBy + After=suspend.target
+After=suspend.target hibernate.target hybrid-sleep.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/resume-display.sh
+
+[Install]
+WantedBy=suspend.target hibernate.target hybrid-sleep.target

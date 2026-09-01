@@ -27,7 +27,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 echo "== [1/7] Scripts -> $BIN_DIR =="
-CORE_SCRIPTS="duo bk.py fn-lock.py wayland-display-mgr.py fnlock-toggle.sh zenbook-doctor.sh"
+CORE_SCRIPTS="duo bk.py fn-lock.py wayland-display-mgr.py fnlock-toggle.sh zenbook-doctor.sh resume-display.sh"
 SERVICE_SCRIPTS="auto-display.sh start.sh kb-light-cycle.sh toggle-bluetooth.sh setup-hotkeys.sh mic-boost.sh setup-displays.sh kb-backlight-unified.sh adaptive-brightness.sh thermal-monitor.sh audio-diagnose.sh audio-calibrate.sh wifi-diagnose.sh test_hardware.sh webcam-diagnose.sh webcam-optimize.sh bt-keyboard-mapper.py zenbook-config.sh suspend-backlight.sh nightlight.sh ssd-health.sh fn-lock.sh system-health.sh disk-monitor.sh weekly-maintenance.sh zzz-keyboard-light oled-protect.sh webcam-privacy.sh firmware-check.sh zenbook-health-check.sh zenbook-boot-test.sh touch-remap.sh setup-touch-wayland.sh amp-enable.sh"
 ALL_SCRIPTS=$(printf '%s\n%s\n' "$CORE_SCRIPTS" "$SERVICE_SCRIPTS" | tr ' ' '\n' | sort -u)
 for script in $ALL_SCRIPTS; do
@@ -56,7 +56,7 @@ systemctl daemon-reload
 echo "  unidades instaladas (permisos 644)"
 
 echo "== [4/7] Servicios habilitados =="
-SERVICES="zenbook-duo.service brightness-sync.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-config.service battery-limit.service zenbook-nightlight.service zenbook-suspend-backlight.service mic-boost.service zenbook-bt-keyboard.service"
+SERVICES="zenbook-duo.service brightness-sync.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-config.service battery-limit.service zenbook-nightlight.service zenbook-suspend-backlight.service zenbook-resume-display.service mic-boost.service zenbook-bt-keyboard.service"
 for svc in $SERVICES; do
     systemctl enable "$svc" >/dev/null 2>&1 || true
 done
