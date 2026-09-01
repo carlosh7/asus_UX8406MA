@@ -202,9 +202,28 @@ Detalle completo en `AUDIT_REPORT.md` §13. **Brillo v3 desplegado, confirmado p
 2. ~~chown autostart~~ ✅ · 3. ~~smartmontools~~ ✅ · 4. ~~tlp start~~ ✅ (EPP=default en AC es normal: governor performance lo hace irrelevante).
 
 ### 🔁 Único pendiente operativo
-- Re-desplegar los 2 fixes de falsos positivos (`aeab137`) — un `sudo cp` de doctor+health-check; comando dado al usuario.
+- ~~Re-desplegar los 2 fixes de falsos positivos (`aeab137`)~~ ✅ desplegado por el usuario (health-check ALL PASSED).
 - Vigilancia normal (sin acción): errores DRM pipe A si apareciera parpadeo; errores HOG BT (mapper se auto-repara).
 - Fase 1 (arquitectura, opcional a largo plazo): daemon v3 event-driven, user units + polkit, config.toml central, empaquetado .deb.
+
+---
+
+## ✅ Ronda 8 (2026-08-29) — bug de resume (reporte usuario)
+
+**Síntoma**: tras suspender o cerrar tapa y retomar con el teclado puesto, la
+pantalla inferior aparecía activada en Configuración→Pantallas y el cursor se
+perdía bajo el teclado.
+
+**Causa**: en el resume Mutter re-enumera los paneles y restaura su layout
+propio ("ambas"); el daemon C solo reacciona a cambios del USB del teclado,
+que en s2idle pueden no ocurrir → nadie re-aplicaba "top".
+
+**Fix** (`b5b1f89`): `zenbook-resume-display.service` (hook de resume,
+WantedBy/After suspend+hibernate+hybrid-sleep) → `resume-display.sh`
+re-aplica top/both según el teclado con bucle de verificación contra
+`duo status` (6 × 2s, gana la carrera contra la re-probe de Mutter) y
+re-aplica el mapeo táctil. Bench con stubs: 7/7 PASS (incluido "Mutter
+terco"). Desplegar con `sudo ./scripts/deploy.sh`.
 
 ### P2
 - H6 decidir autoridad sysctl (TLP vs repo); H7 monitorear flicker DRM pipe A; H8 monitorear errores HOG BT.
