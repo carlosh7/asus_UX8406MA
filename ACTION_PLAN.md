@@ -218,12 +218,24 @@ perdía bajo el teclado.
 propio ("ambas"); el daemon C solo reacciona a cambios del USB del teclado,
 que en s2idle pueden no ocurrir → nadie re-aplicaba "top".
 
-**Fix** (`b5b1f89`): `zenbook-resume-display.service` (hook de resume,
+**Fix** (`b5b1f89` + `590aff2`): `zenbook-resume-display.service` (hook de resume,
 WantedBy/After suspend+hibernate+hybrid-sleep) → `resume-display.sh`
 re-aplica top/both según el teclado con bucle de verificación contra
 `duo status` (6 × 2s, gana la carrera contra la re-probe de Mutter) y
 re-aplica el mapeo táctil. Bench con stubs: 7/7 PASS (incluido "Mutter
 terco"). Desplegar con `sudo ./scripts/deploy.sh`.
+
+**Iteración 2 (v2, `590aff2`)**: en el resume real el hook fallaba —
+`duo status` como root devuelve vacío (no hace drop a sesión) → verificación
+"n/d" ×6. v2 ejecuta status/apply/touch como el usuario gráfico (loginctl).
+**Además**: `zenbook-presleep-light.service` apaga la luz del teclado AL
+ENTRAR en sleep (durante s2idle ningún proceso puede hacerlo; el LED
+persistía toda la noche). Al despertar queda apagada hasta actividad.
+Bench v2: 8/8 PASS.
+
+**✅ VERIFICADO POR USUARIO (2026-09-02)**: cerrar tapa en oscuridad → luz
+apagada con la pantalla; retomar → luz apagada hasta actividad, cursor sin
+fuga, layout top asentado. Circuito de energía completo.
 
 ### P2
 - H6 decidir autoridad sysctl (TLP vs repo); H7 monitorear flicker DRM pipe A; H8 monitorear errores HOG BT.
