@@ -91,6 +91,7 @@ echo "  Removed /etc/zenbook-duo/"
 rm -f /etc/udev/rules.d/50-usb-power-management.rules
 rm -f /etc/udev/rules.d/99-zenbook-keyboard.rules
 rm -f /etc/udev/rules.d/99-zenbook-keyboard-bt.rules
+rm -f /etc/udev/rules.d/99-zenbook-usb-net.rules
 rm -f /etc/udev/rules.d/99-zenbook-npu.rules
 rm -f /etc/udev/rules.d/99-zenbook-duo-amp.rules
 udevadm control --reload-rules 2>/dev/null || true

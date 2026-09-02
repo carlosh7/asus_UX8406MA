@@ -407,6 +407,8 @@ cp "$REPO_DIR/config/udev/50-usb-power-management.rules" /etc/udev/rules.d/50-us
 chmod 644 /etc/udev/rules.d/50-usb-power-management.rules
 cp "$REPO_DIR/config/udev/99-zenbook-keyboard-bt.rules" /etc/udev/rules.d/99-zenbook-keyboard-bt.rules
 chmod 644 /etc/udev/rules.d/99-zenbook-keyboard-bt.rules
+cp "$REPO_DIR/config/udev/99-zenbook-usb-net.rules" /etc/udev/rules.d/99-zenbook-usb-net.rules
+chmod 644 /etc/udev/rules.d/99-zenbook-usb-net.rules
 
 udevadm control --reload-rules 2>/dev/null || true
 udevadm trigger --action=add --subsystem-match=usb 2>/dev/null || true

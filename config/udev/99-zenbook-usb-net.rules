@@ -1,0 +1,7 @@
+# USB Ethernet adapters: nunca autosuspend (ronda 8b)
+# La regla genérica 50-usb-power-management pone autosuspend=2s a todo USB;
+# en un NIC eso mata la negociación PHY (NO-CARRIER) y tumba la conexión.
+# Esta regla corre después (99-) y excluye cualquier adaptador que cree
+# interfaz de red cableada (enx*/eth*): enx = MAC-based de los USB NIC.
+ACTION=="add", SUBSYSTEM=="net", KERNEL=="enx*|eth*", \
+  RUN+="/bin/sh -c 'D=$(readlink -f /sys/class/net/%k/device); echo on > $D/../../power/control 2>/dev/null; echo -1 > $D/../../power/autosuspend 2>/dev/null' || true"
