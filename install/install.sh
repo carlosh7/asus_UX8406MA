@@ -466,7 +466,7 @@ systemctl daemon-reload
 # NOTA (M7, ronda 6): zenbook-auto-display NO se habilita — duplica al daemon C
 # (ambos monitorean el teclado y aplican duo top/both: carrera). La unidad se
 # instala por si se quiere usar manualmente.
-SERVICES="zenbook-duo.service brightness-sync.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-config.service battery-limit.service zenbook-nightlight.service zenbook-suspend-backlight.service zenbook-resume-display.service mic-boost.service zenbook-bt-keyboard.service"
+SERVICES="zenbook-duo.service brightness-sync.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-config.service battery-limit.service zenbook-nightlight.service zenbook-suspend-backlight.service zenbook-resume-display.service zenbook-presleep-light.service mic-boost.service zenbook-bt-keyboard.service"
 for svc in $SERVICES; do
     systemctl enable "$svc" 2>/dev/null && echo "  Enabled: $svc" || echo "  WARNING: Failed to enable $svc"
 done

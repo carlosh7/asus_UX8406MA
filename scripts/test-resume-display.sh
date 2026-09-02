@@ -47,6 +47,7 @@ run_hook
 assert "T1 aplica top" "top" "$(grep -m1 '^top$' "$T/duo-calls.txt")"
 grep -q "OK: modo=top" "$T/log" && assert "T1 verifica OK" "si" "si" || assert "T1 verifica OK" "si" "no"
 [ -f "$T/touch-ran" ] && assert "T1 touch-remap" "si" "si" || assert "T1 touch-remap" "si" "no"
+grep -q "usuario=" "$T/log" && assert "T1 corre como usuario de sesión" "si" "si" || assert "T1 corre como usuario de sesión" "si" "no"
 
 echo "== T2: teclado fuera -> both =="
 rm -f "$T/attached" "$T/duo-calls.txt" "$T/touch-ran"; echo "top" > "$T/mode.txt"

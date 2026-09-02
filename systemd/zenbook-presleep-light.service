@@ -1,0 +1,11 @@
+[Unit]
+Description=Zenbook Duo - Turn off keyboard backlight before sleep
+# Patrón de hook PRE-sleep: WantedBy + Before=sleep.target
+Before=sleep.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/bk.py 0
+
+[Install]
+WantedBy=sleep.target

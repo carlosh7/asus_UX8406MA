@@ -56,7 +56,7 @@ systemctl daemon-reload
 echo "  unidades instaladas (permisos 644)"
 
 echo "== [4/7] Servicios habilitados =="
-SERVICES="zenbook-duo.service brightness-sync.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-config.service battery-limit.service zenbook-nightlight.service zenbook-suspend-backlight.service zenbook-resume-display.service mic-boost.service zenbook-bt-keyboard.service"
+SERVICES="zenbook-duo.service brightness-sync.service zenbook-light-monitor.service zenbook-thermal.service zenbook-adaptive-brightness.service zenbook-config.service battery-limit.service zenbook-nightlight.service zenbook-suspend-backlight.service zenbook-resume-display.service zenbook-presleep-light.service mic-boost.service zenbook-bt-keyboard.service"
 for svc in $SERVICES; do
     systemctl enable "$svc" >/dev/null 2>&1 || true
 done
