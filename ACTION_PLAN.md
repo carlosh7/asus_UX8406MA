@@ -237,6 +237,27 @@ Bench v2: 8/8 PASS.
 apagada con la pantalla; retomar → luz apagada hasta actividad, cursor sin
 fuga, layout top asentado. Circuito de energía completo.
 
+---
+
+## ✅ Ronda 8b (2026-09-02) — adaptador USB-Ethernet sin link (reporte usuario)
+
+**Síntoma**: AX88179A en hub VIA Labs no conectaba ni identificaba red
+(interfaz `enx*` DOWN/NO-CARRIER, fuera de nmcli).
+
+**Diagnóstico con evidencia**:
+- El driver correcto en kernel 7.0 es `cdc_ncm` (firmware nuevo del ASIX es
+  NCM); descartado forzar `ax88179_178a` (alias matchea pero el probe no
+  prospera) — teoría inicial del agente refutada en vivo.
+- **Causa real**: la regla udev genérica del proyecto (`autosuspend=2s` a
+  todo USB, 50-usb-power-management.rules) colgaba el PHY antes de negociar.
+
+**Fix** (`7d9d6e0`): `99-zenbook-usb-net.rules` excluye de autosuspend
+cualquier adaptador que cree interfaz `enx*/eth*` + `USB_DENYLIST` en TLP
+para 0b95:1790/178a.
+
+**Verificado en vivo**: 1000Mb/s full-duplex, carrier 1, NM "Conexión
+cableada", ping al gateway 0% loss.
+
 ### P2
 - H6 decidir autoridad sysctl (TLP vs repo); H7 monitorear flicker DRM pipe A; H8 monitorear errores HOG BT.
 
