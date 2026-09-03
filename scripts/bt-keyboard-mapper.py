@@ -243,6 +243,20 @@ def execute(action):
         status_osd()
 
 
+def lid_closed():
+    """Tapa cerrada: al cerrar el Duo, la pantalla pasa POR ENCIMA del teclado
+    y el borde llega a presionar físicamente la fila F — el sensor ACPI se
+    activa ~2s antes del contacto (ronda 8c: F10 fantasma bloqueaba BT en cada
+    tapa cerrada). Con tapa cerrada las teclas del Zenbook se ignoran."""
+    try:
+        for p in glob.glob("/proc/acpi/button/lid/*/state"):
+            if "closed" in open(p).read():
+                return True
+    except OSError:
+        pass
+    return False
+
+
 def parse_line(line, node):
     global _super_down
     zenbook_node = node in ZENBOOK_NODES
@@ -254,6 +268,8 @@ def parse_line(line, node):
 
     # Teclas multimedia (USB/BT): eventos ABS_MISC del fabricante
     if zenbook_node and "ABS_MISC" in line and "value" in line:
+        if lid_closed():
+            return
         try:
             value = int(line.split("value")[1].strip())
         except ValueError:
@@ -271,6 +287,8 @@ def parse_line(line, node):
 
     # Fila de función: EV_KEY estándar en pulsación (solo teclado desacoplable)
     if zenbook_node and "EV_KEY" in line and "value 1" in line:
+        if lid_closed():
+            return
         for tcode, fkey in SUPER_TRANSLATE_EVKEY.items():
             if _super_down and f"code {tcode} (" in line:
                 log(f"Super+EV_KEY {tcode} -> F{fkey - 58}")
