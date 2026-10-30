@@ -101,6 +101,12 @@ if ls "$REPO_DIR"/config/sysctl/*.conf >/dev/null 2>&1; then
     sysctl --system >/dev/null 2>&1 || true
     echo "  sysctl del repo aplicado"
 fi
+# Ronda 10b: TLP también (otro hueco de sincronización como el sysctl)
+if ls "$REPO_DIR"/config/tlp/*.conf >/dev/null 2>&1; then
+    install -m 644 "$REPO_DIR"/config/tlp/*.conf /etc/tlp.d/
+    systemctl restart tlp.service 2>/dev/null || tlp start >/dev/null 2>&1 || true
+    echo "  TLP del repo aplicado y reiniciado"
+fi
 
 echo "== [7/7] Verificación rápida =="
 systemctl --failed --no-legend | head -5

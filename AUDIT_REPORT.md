@@ -371,3 +371,30 @@ point releases. Objetivo: re-auditar condiciones actuales y adaptar el repo.
 - **P1 GPU**: decidir estrategia real (forzar xe o tunear i915; experimento PSR sugerido en ACTION_PLAN ronda 9.3). Requiere reinicio y decisión del usuario.
 - **P2**: verificación real de la fila BT del mapper (H8/N4); origen del utmp numérico (vigilar).
 - kernel HWE meta vieja `linux-generic-hwe-24.04` instalada junto a la de 26.04 — inofensiva, candidata a `apt autoremove`.
+
+### 15.5 Ronda 10b (2026-10-30 01:35) — "siempre caliente": causa crónica medida
+
+**Reporte del usuario**: equipo caliente y ventiladores trabajando sin demanda real.
+
+**Mediciones en vivo** (00:52–01:30):
+- Pico: sesión agente ZCode (`zcode-cli` → `cargo test/check -p cueflow-core`,
+  whisper-rs C++ ×6 procesos, TTY="?", load 27) → paquete CPU 97-100°C,
+  ventilador 7200 RPM. **Trabajo real, reacción correcta del sistema** (sin
+  throttling, crítico 110). No es un bug del proyecto.
+- **Causa crónica**: en AC, la config TLP del proyecto clavaba TODO en
+  performance — gobernador (`CPU_SCALING_GOVERNOR_ON_AC`), EPP y perfil de
+  plataforma. Medido con carga ~1.5: **mediana de frecuencia 3.3 GHz** (los
+  núcleos no aparcan), paquete 94-100°C sostenido, ventilador 7100 RPM.
+  Además **dos escritores del perfil de plataforma** (TLP en eventos de
+  energía vs monitor térmico por temperatura — patrón duplicado M7).
+- Stack de fondo cueflow (agente 5:11 + WebKit 4:30 de CPU en 1h24) — moderado.
+
+**Fix (repo, pendiente de desplegar con sudo)**:
+- `config/tlp/01-zenbook.conf`: AC → gobernador powersave + EPP
+  balance_performance (valores anteriores comentados); `PLATFORM_PROFILE_*`
+  retirado de TLP (comentado) — el monitor térmico queda como único
+  escritor del perfil. Batería sin cambios.
+- `scripts/deploy.sh`: ahora también sincroniza config/tlp + `tlp start`
+  (tercer hueco de sincronización, tras udev y sysctl).
+- Expectativa: núcleos aparcan a ~400 MHz en reposo; baja la temperatura base
+  y el ventilador se aquieta por debajo de 68°C (umbral quiet del monitor).

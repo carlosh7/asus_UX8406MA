@@ -338,3 +338,23 @@ el nivel elegido 5 min, y con el adaptador USB-Ethernet la regla nueva actúa al
 - `apt autoremove` del meta viejo `linux-generic-hwe-24.04` (inofensivo).
 - Copiar el `test-adaptive-brightness.sh` nuevo al host si se quiere testear en vivo
   (no es runtime; opcional).
+
+---
+
+## ✅ Ronda 10b (2026-10-30 01:35) — "siempre caliente": AC estaba a fondo
+
+Detalle y mediciones en `AUDIT_REPORT.md` §15.5. En corriente, TLP clavaba
+gobernador+EPP+perfil de plataforma en performance → los núcleos no aparcan
+(mediana 3.3 GHz con carga 1.5) y el equipo va tibio siempre. Fix en el repo:
+AC → powersave/balance_performance, perfil de plataforma como única
+autoridad del monitor térmico, y `deploy.sh` sincroniza TLP. Desplegar con
+`sudo ./scripts/deploy.sh` y verificar:
+```bash
+cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor   # → powersave
+grep MHz /proc/cpuinfo | awk '{s+=$4;n++} END{print s/n/1000" GHz prom"}'  # en reposo
+```
+Si se quiere recuperar el comportamiento antiguo: descomentar las líneas
+originales en `config/tlp/01-zenbook.conf` (quedaron documentadas).
+
+Nota: los picos de 97-100°C durante compilaciones del agente (whisper-rs)
+son trabajo real — la ventilación responde correctamente (sin throttling).
