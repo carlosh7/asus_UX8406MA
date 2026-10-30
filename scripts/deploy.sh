@@ -28,7 +28,7 @@ fi
 
 echo "== [1/7] Scripts -> $BIN_DIR =="
 CORE_SCRIPTS="duo bk.py fn-lock.py wayland-display-mgr.py fnlock-toggle.sh zenbook-doctor.sh resume-display.sh"
-SERVICE_SCRIPTS="auto-display.sh start.sh kb-light-cycle.sh toggle-bluetooth.sh setup-hotkeys.sh mic-boost.sh setup-displays.sh kb-backlight-unified.sh adaptive-brightness.sh thermal-monitor.sh audio-diagnose.sh audio-calibrate.sh wifi-diagnose.sh test_hardware.sh webcam-diagnose.sh webcam-optimize.sh bt-keyboard-mapper.py zenbook-config.sh suspend-backlight.sh nightlight.sh ssd-health.sh fn-lock.sh system-health.sh disk-monitor.sh weekly-maintenance.sh zzz-keyboard-light oled-protect.sh webcam-privacy.sh firmware-check.sh zenbook-health-check.sh zenbook-boot-test.sh touch-remap.sh setup-touch-wayland.sh amp-enable.sh"
+SERVICE_SCRIPTS="auto-display.sh start.sh kb-light-cycle.sh toggle-bluetooth.sh setup-hotkeys.sh mic-boost.sh setup-displays.sh kb-backlight-unified.sh adaptive-brightness.sh thermal-monitor.sh audio-diagnose.sh audio-calibrate.sh wifi-diagnose.sh test_hardware.sh webcam-diagnose.sh webcam-optimize.sh bt-keyboard-mapper.py zenbook-config.sh suspend-backlight.sh nightlight.sh ssd-health.sh fn-lock.sh system-health.sh disk-monitor.sh weekly-maintenance.sh zzz-keyboard-light oled-protect.sh webcam-privacy.sh firmware-check.sh zenbook-health-check.sh zenbook-boot-test.sh touch-remap.sh setup-touch-wayland.sh amp-enable.sh zenbook-usb-net-on.sh"
 ALL_SCRIPTS=$(printf '%s\n%s\n' "$CORE_SCRIPTS" "$SERVICE_SCRIPTS" | tr ' ' '\n' | sort -u)
 for script in $ALL_SCRIPTS; do
     if [ -f "$REPO_DIR/scripts/$script" ]; then
@@ -82,6 +82,26 @@ for f in /etc/logrotate.d/zenbook-duo.conf /etc/modprobe.d/xe-gpu-optimize.conf 
     if [ -f "$f" ]; then chmod 644 "$f"; fi
 done
 
+# Ronda 10: sincronizar reglas udev y sysctl del repo (antes solo install.sh
+# los copiaba → deriva repo↔host: el fix H6/sysctl y el helper usb-net
+# nunca llegaban con deploy). Verificar cada regla antes de instalarla.
+if command -v udevadm >/dev/null 2>&1; then
+    for r in "$REPO_DIR"/config/udev/*.rules; do
+        if udevadm verify "$r" >/dev/null 2>&1; then
+            install -m 644 "$r" /etc/udev/rules.d/
+        else
+            echo "  AVISO: regla inválida, NO instalada: $(basename "$r")"
+            udevadm verify "$r" || true
+        fi
+    done
+    udevadm control --reload 2>/dev/null || true
+fi
+if ls "$REPO_DIR"/config/sysctl/*.conf >/dev/null 2>&1; then
+    install -m 644 "$REPO_DIR"/config/sysctl/*.conf /etc/sysctl.d/
+    sysctl --system >/dev/null 2>&1 || true
+    echo "  sysctl del repo aplicado"
+fi
+
 echo "== [7/7] Verificación rápida =="
 systemctl --failed --no-legend | head -5
 /usr/local/bin/zenbook-health-check.sh 2>/dev/null | tail -3 || true
@@ -89,7 +109,16 @@ systemctl --failed --no-legend | head -5
 if [ "$DIAG" -eq 1 ]; then
     OUT=/tmp/zenbook-diag.txt
     {
-        echo "=== xe params ==="
+        # Ronda 10 (N1 ronda 9): reportar el driver REALMENTE enlazado a la
+        # GPU y los parámetros de ESE módulo — la ronda 6c leía /sys/module/xe
+        # mientras el host corría con i915 y el diagnóstico era inválido.
+        echo "=== GPU driver (bound) ==="
+        gpu_drv=$(basename "$(readlink -f /sys/bus/pci/devices/0000:00:02.0/driver 2>/dev/null)" 2>/dev/null || echo "?")
+        echo "bound: $gpu_drv"
+        if [ -n "$gpu_drv" ] && [ "$gpu_drv" != "?" ] && [ -d "/sys/module/$gpu_drv/parameters" ]; then
+            for p in /sys/module/"$gpu_drv"/parameters/*; do echo "$(basename "$p")=$(cat "$p" 2>/dev/null)"; done | grep -E 'fbc|psr|sagv|ips|dc=|panel_replay' || true
+        fi
+        echo "=== xe params (si el módulo existe) ==="
         for p in /sys/module/xe/parameters/*; do echo "$(basename "$p")=$(cat "$p" 2>/dev/null)"; done | grep -E 'fbc|psr|sagv|ips|dc=|panel_replay' || true
         echo "=== tlp-stat -s ==="; tlp-stat -s 2>/dev/null | head -25 || true
         echo "=== nvme smart ==="; nvme smart-log /dev/nvme0 2>/dev/null | grep -E 'critical_warning|percentage_used|media_errors|unsafe_shutdowns' || echo "nvme-cli no instalado"

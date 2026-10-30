@@ -265,3 +265,76 @@ cableada", ping al gateway 0% loss.
 ```bash
 pkexec bash -c 'for p in /sys/module/xe/parameters/{enable_fbc,enable_psr,enable_dc,enable_panel_replay}; do echo "$p=$(cat $p 2>/dev/null)"; done; tlp-stat -s | head -20; visudo -cf /etc/sudoers.d/zenbook-duo; ls -la /etc/logrotate.d/zenbook-duo.conf'
 ```
+
+---
+
+## 🔎 Ronda 9 (2026-10-30) — incidente pantalla principal muerta + OSD/luz tras reinicio
+
+Detalle y evidencia en `AUDIT_REPORT.md` §14. Hallazgos N1–N4. Pendientes propuestos:
+
+### P0 — bugs de código (una sesión corta)
+1. **Mapper OSD (N3)**: `find_session_user()` confía en el campo USER de `who`, que puede
+   ser el UID numérico ("1000") → `getpwnam` KeyError → sin OSD de brillo ni mic.
+   Fix: usar el UID de loginctl (`parts[1]`) directamente y `getpwuid`, o validar el
+   nombre con `getpwnam` antes de aceptarlo (caer al fallback loginctl). Incluye test
+   con `who` simulado numérico.
+2. **Regla udev usb-net (N2, ronda 8b)**: `RUN+="… $(…)/$D …"` → udevd "invalid
+   substitution type", regla ignorada. Fix: escapar `$$D` o mover la lógica a script
+   helper `/usr/local/bin/zenbook-usb-net-on.sh` con `RUN+="…/script %k"`. Validar con
+   `udevadm verify` + recarga + test con el adaptador.
+
+### P1 — estabilidad de pantalla (requiere ventana con sudo/reinicio)
+3. **Tuning DRM real (N1)**: decidir estrategia — o forzar `xe` de verdad, o llevar el
+   tuning a i915. Primer experimento sugerido: `i915.enable_psr=0` como parámetro de
+   kernel temporal (PSR es el sospechoso clásico de "panel no despierta" en OLED) y
+   vigilar 1–2 semanas los `Atomic update failure` (línea base actual: ~6/día).
+4. **Runbook "pantalla muerta"**: documentar la salida sin cortar corriente:
+   Ctrl+Alt+F3 (VT) → `loginctl terminate-session` / `sudo systemctl restart gdm`, o
+   SSH/Tailscale desde el móvil. Añadir a USAGE.md.
+
+### P2 — robustez
+5. `sync-backlight`: saltar la escritura si el valor destino ya es el mismo (elimina la
+   ráfaga "out of range" en cada ajuste de brillo; hoy escribe 0 una y otra vez).
+6. `kb-light-cycle.sh`: pausa TTL del monitor (lock file) para que F4 mantenga el nivel
+   elegido unos minutos sin pelearse con kb-backlight-unified.
+7. Mapper: init de fila BT con verificación real (hoy rc=0 aunque bluetoothd falle el
+   reporte HOG — visible esta noche).
+8. Vigilar: por qué utmp registró la sesión como "1000" (posible resabio del arranque
+   temprano; sssd sockets fallaron en el boot). Si se repite, investigar NSS en arranque.
+
+---
+
+## ✅ Ronda 10 (2026-10-30) — puesta al día tras 2 meses de updates (kernel 7.0.0-42, GNOME 50.1)
+
+Evidencia completa en `AUDIT_REPORT.md` §15. Ejecutado y validado en el repo:
+
+| Item ronda 9 | Estado |
+|---|---|
+| P0-1 Mapper OSD (N3) | ✅ **FIX + test 5/5** (`_resolve_user`, `test-bt-mapper-user.sh`) |
+| P0-2 Regla udev usb-net (N2) | ✅ **FIX** (helper `zenbook-usb-net-on.sh` + regla reescrita; `udevadm verify` OK) |
+| P2-5 sync-backlight spam | ✅ **FIX + prueba viva** (skip si valor igual) |
+| P2-6 pausa manual F4 | ✅ **FIX + test 6/6** (`kb-backlight.manual`, hold 300 s) |
+| P1-4 runbook pantalla muerta | ✅ `USAGE.md` |
+| P1-3 tuning DRM | ◐ pendiente decisión (forzar xe vs tunear i915 / PSR) |
+| P2-7 fila BT verificación real | ◐ pendiente |
+
+**Nuevos en ronda 10**:
+- `deploy.sh` ahora sincroniza reglas udev (con `udevadm verify` previo) y sysctl
+  (causa de la deriva H6: el fix de ronda 7 nunca llegó al host por esta vía) y el
+  `--diag` reporta el driver de GPU realmente enlazado.
+- Regla `99-zenbook-keyboard.rules` (USB 0b05:1b2c 0660 input) capturada al repo.
+- Verificado: mapeo táctil **intacto** en GNOME 50 (esquema renombrado, misma ruta
+  dconf — el repo escribe por dconf, sin cambio necesario); NPU viva en nueva ruta
+  `/dev/accel/accel0` con acceso OK (grupo render).
+
+**Despliegue al host (ventana de sudo del usuario)**:
+```bash
+sudo ./scripts/deploy.sh
+```
+Luego probar: F5/F6 deben mostrar OSD de brillo (mapper reiniciado), F4 debe mantener
+el nivel elegido 5 min, y con el adaptador USB-Ethernet la regla nueva actúa al enchufar.
+
+### P2 menor (ronda 10)
+- `apt autoremove` del meta viejo `linux-generic-hwe-24.04` (inofensivo).
+- Copiar el `test-adaptive-brightness.sh` nuevo al host si se quiere testear en vivo
+  (no es runtime; opcional).

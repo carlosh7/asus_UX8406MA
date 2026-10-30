@@ -168,3 +168,20 @@ wifi-diagnose.sh      # Diagnosticar problemas de WiFi
 # En Wayland: touch funciona automáticamente
 # En X11: ejecutar setup-hotkeys.sh para configurar
 ```
+
+## Emergencia: pantalla principal muerta (runbook, ronda 10)
+
+Si la pantalla principal se queda negra y no despierta (blank por inactividad que
+no revive — incidente 2026-10-29, AUDIT §14.1), **no cortes la corriente con el
+botón de power** (deja el journal "uncleanly shut down"). Prueba en orden:
+
+1. **Consola de texto**: `Ctrl+Alt+F3` → login → reiniciar la sesión gráfica:
+   ```bash
+   sudo systemctl restart gdm
+   ```
+2. **SSH/Tailscale** (desde el móvil u otro equipo): mismo comando `sudo systemctl restart gdm`.
+3. Si la pantalla *inferior* sí vive (teclado quitado), abre una terminal ahí y ejecuta `duo both` o el paso 1.
+4. Último recurso: botón de power.
+
+Causa conocida: inestabilidad del driver de video con el doble OLED (fallos
+"Atomic update failure" en el journal). Seguimiento en ACTION_PLAN ronda 9/10 (P1).

@@ -77,16 +77,41 @@ def log(msg):
     print(msg, flush=True)
 
 
+def _resolve_user(cand):
+    """Normaliza un candidato a nombre de usuario real.
+
+    v3 (ronda 10): utmp puede anotar el campo USER con el UID numérico
+    (observado 2026-10-29: `who` => "1000 seat0 …"). getpwnam('1000')
+    falla siempre (busca un usuario *llamado* 1000) y mataba el
+    notify-send del OSD de brillo (28 errores en una noche).
+    """
+    if not cand:
+        return ""
+    try:
+        return pwd.getpwnam(cand).pw_name
+    except KeyError:
+        if cand.isdigit():
+            try:
+                return pwd.getpwuid(int(cand)).pw_name
+            except KeyError:
+                pass
+    return ""
+
+
 def find_session_user():
     """Usuario con sesión gráfica activa (para wpctl/notify-send)."""
     u = os.environ.get("SUDO_USER", "")
     if u:
-        return u
+        r = _resolve_user(u)
+        if r:
+            return r
     try:
         out = subprocess.run(["who"], capture_output=True, text=True).stdout
         for line in out.splitlines():
             if "(:" in line or "seat0" in line:
-                return line.split()[0]
+                cand = _resolve_user(line.split()[0])
+                if cand:
+                    return cand
     except Exception:
         pass
     # Fallback robusto: loginctl (Wayland no siempre aparece en `who`)
@@ -101,7 +126,9 @@ def find_session_user():
             stype = subprocess.run(["loginctl", "show-session", sid, "-p", "Type", "--value"],
                                    capture_output=True, text=True).stdout.strip()
             if stype in ("wayland", "x11"):
-                return parts[2]
+                cand = _resolve_user(parts[2]) or _resolve_user(parts[1])
+                if cand:
+                    return cand
     except Exception:
         pass
     return ""
@@ -109,7 +136,10 @@ def find_session_user():
 
 def _session_env(user):
     """Entorno D-Bus del usuario de sesión (uid vía pwd, sin hardcodes)."""
-    uid = pwd.getpwnam(user).pw_uid
+    try:
+        uid = pwd.getpwnam(user).pw_uid
+    except KeyError:
+        uid = pwd.getpwuid(int(user)).pw_uid  # defensivo: UID numérico
     return {
         **os.environ,
         "DBUS_SESSION_BUS_ADDRESS": f"unix:path=/run/user/{uid}/bus",

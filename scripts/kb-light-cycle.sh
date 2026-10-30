@@ -23,3 +23,10 @@ NEW_LEVEL=$(( (LEVEL + 1) % 4 ))
 
 # Save state
 echo "$NEW_LEVEL" > "$STATE_FILE" 2>/dev/null
+
+# Ronda 10: marca de ciclo manual — kb-backlight-unified respeta el nivel
+# elegido durante MANUAL_HOLD_SEC en vez de aplanarlo con la curva ALS
+# (lucha visible 2026-10-29: 4× "set to level 0" en 19 s contra la tecla)
+MANUAL_LOCK="${ZB_MANUAL_LOCK:-$(dirname "$STATE_FILE")/kb-backlight.manual}"
+mkdir -p "$(dirname "$MANUAL_LOCK")" 2>/dev/null || true
+date +%s > "$MANUAL_LOCK" 2>/dev/null || true

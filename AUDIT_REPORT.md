@@ -255,3 +255,119 @@ daemon/auto-display (M7), uninstall sincronizado (M8), zombies+toggle_bluetooth,
 health-check/SPEC/thermal/nightlight/sysctl, y la capa nueva **zenbook-doctor**
 (auto-validación/reparación cada 15 min) + **deploy.sh** (despliegue repo→host en
 un comando). Smartmontools instalado (H9). Score final del proyecto: **88/100**.
+
+---
+
+## 14. Ronda 9 (2026-10-30 00:30) — Incidente: pantalla principal muerta + síntomas post-reinicio
+
+**Reporte del usuario**: la pantalla principal se apagó por inactividad (normal) y ya no
+encendió; quitando el teclado la inferior encendió pero la principal no; apagado forzado
+con botón de power. Tras reiniciar: la luz del teclado no respondía a su tecla y el OSD
+de brillo no aparecía; "a los pocos minutos" se normalizó.
+
+### 14.1 Línea de tiempo (boot -1, 10:28:15 → 23:30:21, sin suspensión)
+
+| Hora | Evento |
+|------|--------|
+| todo el día | **6×** i915 `Atomic update failure on pipe A` + **~25×** gnome-shell `Cursor update failed: drmModeAtomicCommit` — la inestabilidad crónica (H7) estuvo activa todo el día |
+| 23:29:05 | daemon: teclado quitado → `both` **correcto** (la inferior encendió) |
+| 23:29:18 | teclado puesto → `top` correcto, pero la principal **siguió negra** |
+| 23:29:59 | `gdm-password` PAM: "conversation failed / could not identify password" — el diálogo de desbloqueo no recibía la contraseña |
+| 23:30:03 | gnome-shell: ráfaga `St.Label already disposed` (animaciones rotas del OSD/diálogo) |
+| 23:30:16 | `Power key pressed short` → apagado forzado (única vía que le quedó al usuario) |
+
+**Causa raíz**: colgado de la tubería DRM del panel principal (pipe A) tras el blank por
+inactividad — capa kernel (i915) + Mutter. El daemon, la sesión y los servicios siguieron
+vivos todo el tiempo (logs de sesión hasta 23:30:11). Es la materialización grave del H7
+crónico; primera vez que deja el panel sin revivir. El journal "uncleanly shut down" del
+boot 0 es consecuencia del apagado forzado, no causa.
+
+### 14.2 Post-reinicio: síntomas root-caused (boot 0, desde 23:30:54)
+
+1. **OSD de brillo ausente — bug de código confirmado (28 errores, 23:53:24–23:54:00)**.
+   `bt-keyboard-mapper.py` → `find_session_user()`: la rama `who` devuelve el campo USER
+   de utmp, que en este arranque contiene el **UID numérico "1000"** en vez de "jim"
+   (`who` ⇒ `1000  seat0  2026-10-29 23:31`); `getpwnam('1000')` falla siempre (busca un
+   usuario *llamado* "1000"; verificado en vivo). El brillo SÍ se aplicaba por sysfs
+   (`brillo -> 360/400 (90%)`); solo moría el `notify-send`. Por USB el firmware emite
+   códigos nativos de brillo que GNOME maneja con su OSD propio → "se arregló solo" al
+   acoplar el teclado a las 23:54:02.
+2. **Luz de teclado muerta**: dos factores combinados: (a) teclado vía **BT con fallos de
+   reporte** (bluetoothd `hog set_report_cb` cada ~60 s desde 23:31; el init de fila del
+   mapper reporta rc=0 = verificación débil), y (b) **lucha de dos controladores**: el
+   monitor v5 re-aplicaba su nivel ALS/idle cada 1 s sobre los ciclos de F4 (23:53:25–44:
+   4× "set to level 0" en 19 s, mismo `kb-backlight.state`). Se estabilizó al acoplar por
+   USB (23:54:02, nivel 1 por actividad detectada).
+3. **`Backlight eDP-2: Value read from sysfs is out of range` (16–160×/arranque, crónico)**.
+   Disparador exacto **reproducido en vivo (00:15:04)**: cualquier cambio de brillo de la
+   principal → watcher → `sync-backlight` escribe **0** en `card1-eDP-2-backlight` (rama
+   attached) → gnome-shell lo lee "fuera de rango". Escribir un valor intermedio (100) NO
+   lo dispara. Ruido benigno (día entero sin rotura funcional) pero ensucia el journal y
+   confunde diagnósticos.
+
+### 14.3 Hallazgos estructurales nuevos
+
+| # | Severidad | Hallazgo |
+|---|-----------|----------|
+| N1 | **Alta** | **La GPU corre con `i915`, no con `xe`** (0000:00:02.0 → drivers/i915). `config/modprobe/xe-gpu-optimize.conf` es **inerte**. La verificación de §13.4 (xe params "todas activas") leía el módulo equivocado: el host no tiene NINGÚN tuning DRM aplicado. Ligado a la causa raíz de 14.1 |
+| N2 | **Alta** | **Regla udev `99-zenbook-usb-net.rules` (ronda 8b) rota**: udevd la rechaza — "Invalid value for RUN (char 15: invalid substitution type)": `$D` dentro del string no es sustitución válida de udev (debe ser `$$D` o script helper). La mitad udev del fix del NIC nunca corrió; el fix real lo sostiene el `USB_DENYLIST` de TLP. Repo y host idénticos (mismo bug) |
+| N3 | Media | utmp registra la sesión con UID numérico ("1000") → cualquier código que confíe en el campo USER de `who` se rompe (hoy: OSD del mapper, también el OSD de mic-mute) |
+| N4 | Baja | La verificación de fila del mapper por BT es débil (rc=0 aunque bluetoothd falle el reporte) — ya cubierto como H8, hoy con impacto visible |
+
+### 14.4 Verificaciones de la ronda
+
+- Deriva repo↔host: `cmp` de bt-keyboard-mapper.py, kb-backlight-unified.sh, duo,
+  kb-light-cycle.sh → **todos idénticos** (los bugs están en el código actual).
+- Servicios boot 0: 12/12 activos, 0 failed; doctor ejecutándose cada 15 min ✓.
+- Reproducción out-of-range: escritura controlada 185→intel_backlight con journal en
+  paralelo (00:15:04) ✓; contra-prueba 100→eDP-2 sin error ✓.
+- `getpwnam('1000')` → KeyError confirmado en vivo ✓; `getent passwd 1000` OK (getent
+  trata el argumento numérico como UID, `pwd.getpwnam` no — por eso pasó inadvertido).
+- udevd: mensaje de rechazo de la regla usb-net en el journal de boot 0 ✓.
+
+---
+
+## 15. Ronda 10 (2026-10-30 01:20) — puesta al día tras 2 meses de actualizaciones del sistema
+
+**Contexto**: último trabajo del repo = ronda 8b (2026-09-02). Desde entonces el host
+recibió **104 operaciones de paquetes**: Ubuntu 26.04.1, kernel 7.0.0-38 → **7.0.0-42**,
+GNOME **50.1** (era otra generación en agosto), systemd 259.5 → 259.9, udev/bluez/mutter
+point releases. Objetivo: re-auditar condiciones actuales y adaptar el repo.
+
+### 15.1 Estado del host tras las actualizaciones
+
+| Área | Estado | Evidencia |
+|------|--------|-----------|
+| Servicios | **0 unidades fallidas**, doctor activo | `systemctl --failed` vacío |
+| Mapeo táctil | **INTACTO** — falso susto: GNOME 50 renombró el esquema `touchscreens`→`touchscreen` (singular) pero **lee la misma ruta dconf** donde el repo escribe (`dconf write`, agnóstico de esquema). Validos: 425b→eDP-1 (sup), 425a→eDP-2 (inf) | `gsettings get "org.gnome.desktop.peripherals.touchscreen:/org/gnome/desktop/peripherals/touchscreens/04f3:425b/" output` → `['SDC','0x419d','0x00000000','eDP-1']` |
+| NPU | Driver `intel_vpu` cargado y funcionando; el nodo se movió a **`/dev/accel/accel0`** (subcarpeta nueva del kernel). Acceso de jim OK vía grupo render + ACL (la regla del installer `KERNEL=="accel*"` sigue matcheando) | journal boot 0: "Initialized intel_vpu 1.0.0"; `ls -l /dev/accel/` |
+| GPU | Sigue **i915** enlazado (no xe) — confirma N1 ronda 9; sin tuning DRM aplicado | readlink driver 0000:00:02.0 |
+| Deriva repo↔host | Mínima: unidades solo difieren en `User=` (por diseño); **sysctl del host viejo** (fix H6 de ronda 7 nunca se desplegó — deploy no copiaba sysctl); test-adaptive viejo en host; regla `99-zenbook-keyboard.rules` existía solo en el host | diffs archivo por archivo |
+| Hotkeys dconf | custom0-3 presentes ✓, fnlock-mode=0 ✓ | gsettings + /etc/zenbook-duo |
+
+### 15.2 Fixes aplicados al repo (validados)
+
+| # | Fix | Archivos | Validación |
+|---|-----|----------|------------|
+| F1 | **OSD mapper (N3 ronda 9)**: `_resolve_user()` normaliza candidato UID-numérico→nombre (`getpwuid`); `find_session_user()` valida todo candidato; `_session_env()` tolera UID defensivamente | `scripts/bt-keyboard-mapper.py` | `test-bt-mapper-user.sh` **5/5 PASS** (incluye el caso real de utmp numérico) · py_compile ✓ · anti-hardcode ✓ |
+| F2 | **Regla udev usb-net (N2 ronda 9)**: lógica a script helper; regla llama `/usr/local/bin/zenbook-usb-net-on.sh %k` | `scripts/zenbook-usb-net-on.sh` (nuevo), `config/udev/99-zenbook-usb-net.rules` | `udevadm verify` OK (las 5 reglas) · bash -n ✓ · shellcheck ✓ |
+| F3 | **sync-backlight sin spam**: solo escribe si el valor destino difiere (reescribir 0 sobre 0 disparaba "out of range" en cada ajuste de brillo) | `scripts/duo` | **Prueba viva**: plantado 100 → sync escribe 0 UNA vez (tee en journal); segunda pasada con valor igual = 0 tees ✓ |
+| F4 | **Pausa manual luz teclado**: F4 (kb-light-cycle) escribe marca; el monitor respeta el nivel elegido `MANUAL_HOLD_SEC` (300 s, configurable) sin aplastarlo con la curva ALS; el idle-off sigue vivo | `scripts/kb-light-cycle.sh`, `scripts/kb-backlight-unified.sh` | `test-kb-backlight.sh` **6/6 PASS** · bash -n ✓ · shellcheck ✓ |
+| F5 | **deploy.sh sincroniza udev+sysctl** (verifica cada regla con `udevadm verify` antes de instalar; `sysctl --system` tras copiar) y el `--diag` reporta el **driver realmente enlazado** + sus parámetros (fin del diagnóstico al módulo equivocado) | `scripts/deploy.sh` | bash -n ✓ · shellcheck ✓ |
+| F6 | Regla USB del teclado capturada al repo (existía solo en /etc — clase M1) | `config/udev/99-zenbook-keyboard.rules` (nuevo) | udevadm verify ✓ |
+| F7 | Helper usb-net añadido a las listas de instalación | `install/install.sh`, `scripts/deploy.sh` | — |
+| F8 | **Runbook "pantalla muerta"** para no cortar corriente (VT + restart gdm / SSH) | `USAGE.md` | — |
+
+### 15.3 Verificaciones de la ronda
+
+- `bash -n` ✓ (7 archivos tocados) · `shellcheck -S warning` ✓ · `py_compile` ✓
+- `udevadm verify` ✓ 5/5 reglas · `systemd-analyze --man=no verify` exit 0
+- Tests: `test-bt-mapper-user.sh` **5/5** · `test-kb-backlight.sh` **6/6**
+- Grep anti-hardcode (patrón CI) limpio en todos los archivos tocados
+- Deriva post-fix: los scripts modificados difieren del host **hasta desplegar** (esperado); comando: `sudo ./scripts/deploy.sh`
+
+### 15.4 Pendiente (sin cambios esta ronda)
+
+- **P1 GPU**: decidir estrategia real (forzar xe o tunear i915; experimento PSR sugerido en ACTION_PLAN ronda 9.3). Requiere reinicio y decisión del usuario.
+- **P2**: verificación real de la fila BT del mapper (H8/N4); origen del utmp numérico (vigilar).
+- kernel HWE meta vieja `linux-generic-hwe-24.04` instalada junto a la de 26.04 — inofensiva, candidata a `apt autoremove`.

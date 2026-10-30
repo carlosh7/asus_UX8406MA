@@ -19,6 +19,10 @@ CHECK_INTERVAL_ACTIVE="${ZB_ACTIVE:-3}"     # Seconds between checks when backli
 CHECK_INTERVAL_IDLE="${ZB_IDLE_POLL:-1}"    # Seconds between checks when backlight is OFF (fast wake-up)
 INACTIVITY_TIMEOUT="${INACTIVITY_TIMEOUT:-30000}"  # 30 seconds idle -> turn off backlight (ms)
 DEBOUNCE_SEC=10                             # Minimum seconds between level changes (when ON)
+# Ronda 10: la tecla de ciclo manual (kb-light-cycle) escribe una marca; el
+# auto-ajuste se pausa MANUAL_HOLD_SEC para no aplanar el nivel elegido
+MANUAL_LOCK="${ZB_MANUAL_LOCK:-/var/lib/zenbook-duo/kb-backlight.manual}"
+MANUAL_HOLD_SEC="${MANUAL_HOLD_SEC:-300}"
 
 # Config opcional del usuario (sobreescribe lo anterior):
 #   /etc/zenbook-duo/kb-backlight.conf
@@ -123,6 +127,13 @@ debounce_ok() {
     [ "$elapsed" -ge "$DEBOUNCE_SEC" ]
 }
 
+# Ronda 10: ¿el usuario acaba de ciclar la luz con la tecla? (kb-light-cycle)
+manual_hold_active() {
+    local ts=$(cat "$MANUAL_LOCK" 2>/dev/null || echo 0)
+    local now=$(date +%s)
+    [ "$((now - ts))" -ge 0 ] && [ "$((now - ts))" -lt "$MANUAL_HOLD_SEC" ]
+}
+
 set_keyboard_backlight() {
     local level="$1"
     local current_level=$(cat "$STATE_FILE" 2>/dev/null || echo "-1")
@@ -163,6 +174,7 @@ fi
 echo "2" > "$STATE_FILE"
 
 PREV_IDLE_STATE="active"   # "active" or "idle"
+MANUAL_NOTIFIED=0          # log del manual-hold emitido una sola vez
 
 while true; do
     # 1. Keyboard attached?
@@ -191,6 +203,18 @@ while true; do
             log_msg "Activity detected (${idle_ms}ms) -> restoring"
             PREV_IDLE_STATE="active"
         fi
+
+        # Ronda 10: tras un ciclo manual (tecla F4), respetar el nivel elegido
+        # durante MANUAL_HOLD_SEC; el idle-off del bloque de arriba sigue vivo
+        if manual_hold_active; then
+            if [ "$MANUAL_NOTIFIED" -eq 0 ]; then
+                log_msg "Manual hold activo (${MANUAL_HOLD_SEC}s) — auto-ajuste en pausa"
+                MANUAL_NOTIFIED=1
+            fi
+            sleep "$CHECK_INTERVAL_ACTIVE"
+            continue
+        fi
+        MANUAL_NOTIFIED=0
 
         lux=$(get_ambient_light)
         light_level=$(get_light_level "$lux")

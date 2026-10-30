@@ -3,5 +3,8 @@
 # en un NIC eso mata la negociación PHY (NO-CARRIER) y tumba la conexión.
 # Esta regla corre después (99-) y excluye cualquier adaptador que cree
 # interfaz de red cableada (enx*/eth*): enx = MAC-based de los USB NIC.
+# Ronda 10: la lógica pasó a zenbook-usb-net-on.sh — el RUN de udev no
+# admite $( ) ni variables de shell (udevd: "invalid substitution type";
+# esta regla llevaba sin ejecutarse desde la 8b — hallazgo N2 ronda 9).
 ACTION=="add", SUBSYSTEM=="net", KERNEL=="enx*|eth*", \
-  RUN+="/bin/sh -c 'D=$(readlink -f /sys/class/net/%k/device); echo on > $D/../../power/control 2>/dev/null; echo -1 > $D/../../power/autosuspend 2>/dev/null' || true"
+  RUN+="/usr/local/bin/zenbook-usb-net-on.sh %k"
